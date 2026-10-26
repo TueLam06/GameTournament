@@ -1,0 +1,9 @@
+out/
+data/
+demo_output.txt
+*.class
+.idea/
+.vscode/
+*.iml
+gui/out/
+gui/build/

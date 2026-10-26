@@ -1,0 +1,341 @@
+package gtms.test;
+
+import gtms.exception.InvalidScoreException;
+import gtms.exception.InvalidStatusTransitionException;
+import gtms.exception.RegistrationClosedException;
+import gtms.exception.TeamNotEligibleException;
+import gtms.exception.TournamentException;
+import gtms.model.Admin;
+import gtms.model.Match;
+import gtms.model.Player;
+import gtms.model.RankingEntry;
+import gtms.model.Registration;
+import gtms.model.RegistrationStatus;
+import gtms.model.Team;
+import gtms.model.TeamManager;
+import gtms.model.Tournament;
+import gtms.model.TournamentFormat;
+import gtms.model.TournamentStatus;
+import gtms.model.User;
+import gtms.repository.DataStore;
+import gtms.repository.Repository;
+import gtms.service.TournamentService;
+import gtms.util.AppClock;
+
+import java.nio.file.Files;
+import java.nio.file.Path;
+import java.time.LocalDateTime;
+import java.util.ArrayList;
+import java.util.HashSet;
+import java.util.LinkedHashMap;
+import java.util.List;
+import java.util.Map;
+import java.util.Set;
+
+/** Chạy bằng "ConsoleApp test". Không dùng JUnit: test nào sai thì ném AssertionError. */
+public final class CoreTests {
+
+    @FunctionalInterface
+    private interface TestCase {
+        void run() throws Exception;
+    }
+
+    private static final LocalDateTime NOW = LocalDateTime.of(2026, 11, 1, 10, 0);
+    private static int sequence = 0;
+
+    private CoreTests() { }
+
+    public static boolean runAll() {
+        AppClock.setFixed(NOW);
+        Map<String, TestCase> tests = new LinkedHashMap<>();
+        tests.put("Mật khẩu được băm, xác thực đúng/sai", CoreTests::passwordIsHashed);
+        tests.put("Round Robin 4 đội: 6 trận, 3 vòng, mỗi cặp gặp 1 lần", () -> roundRobinPairs(4, 6, 3));
+        tests.put("Round Robin 5 đội (lẻ, có bye): 10 trận, 5 vòng", () -> roundRobinPairs(5, 10, 5));
+        tests.put("Single Elimination 6 đội: 2 bye, 5 trận, 3 vòng", CoreTests::singleEliminationByes);
+        tests.put("BXH: thắng 3 / hòa 1 / thua 0, sắp xếp đúng", CoreTests::rankingPoints);
+        tests.put("Sửa kết quả không cộng điểm hai lần", CoreTests::editResultRecalculates);
+        tests.put("Hết slot vào danh sách chờ, hủy đơn thì được đôn lên", CoreTests::waitingListPromotion);
+        tests.put("Ngoại lệ tỉ số: âm, trống, hòa ở loại trực tiếp", CoreTests::invalidScores);
+        tests.put("Ngoại lệ đăng ký: thiếu người, sai game, đóng cổng", CoreTests::registrationErrors);
+        tests.put("Chuyển trạng thái giải không hợp lệ bị chặn", CoreTests::invalidTransitions);
+        tests.put("Giải tự kết thúc khi trận cuối có kết quả", CoreTests::tournamentFinishes);
+        tests.put("Sửa cấu hình và xóa giải chỉ khi còn Nháp", CoreTests::editAndDeleteOnlyInDraft);
+        tests.put("Thành tích tổng hợp của đội qua nhiều trận", CoreTests::teamSummary);
+        tests.put("Repository generic: tìm theo mã, lọc theo kiểu con", CoreTests::genericRepository);
+        tests.put("Lưu và nạp lại file dữ liệu giữ nguyên tham chiếu", CoreTests::saveAndLoad);
+        tests.put("NFR-01: sinh lịch 32 đội + BXH dưới 2 giây", CoreTests::performance32Teams);
+
+        int passed = 0;
+        for (Map.Entry<String, TestCase> test : tests.entrySet()) {
+            try {
+                test.getValue().run();
+                passed++;
+                System.out.println("[PASS] " + test.getKey());
+            } catch (Throwable e) {
+                System.out.println("[FAIL] " + test.getKey() + " -> " + e);
+            }
+        }
+        System.out.printf("Kết quả: %d/%d test đạt%n", passed, tests.size());
+        AppClock.useSystemClock();
+        return passed == tests.size();
+    }
+
+    private static void check(boolean condition, String message) {
+        if (!condition) {
+            throw new AssertionError(message);
+        }
+    }
+
+    private static <E extends Exception> void expect(Class<E> type, TestCase action) throws Exception {
+        try {
+            action.run();
+        } catch (Exception e) {
+            if (type.isInstance(e)) {
+                return;
+            }
+            throw new AssertionError("Mong đợi " + type.getSimpleName() + " nhưng nhận " + e);
+        }
+        throw new AssertionError("Mong đợi " + type.getSimpleName() + " nhưng không có ngoại lệ");
+    }
+
+    private static TeamManager managerWithTeam(int players, String game) throws TournamentException {
+        int id = ++sequence;
+        TeamManager m = new TeamManager("TM" + id, "Manager " + id, "m" + id + "@test.vn", "Passw0rd");
+        m.createTeam("Team " + id, "", "HN", game);
+        for (int i = 0; i < players; i++) {
+            m.addPlayer(new Player("P" + id + "_" + i, "nick" + id + "_" + i, "Player " + i, "Flex", "G" + i));
+        }
+        return m;
+    }
+
+    private static Admin admin() {
+        return new Admin("AD" + (++sequence), "Admin", "admin" + sequence + "@test.vn", "Passw0rd");
+    }
+
+    private static Tournament openTournament(Admin admin, TournamentFormat format, int maxTeams)
+            throws TournamentException {
+        Tournament t = admin.createTournament("Giải test " + (++sequence), "Valorant", format, maxTeams, 2,
+                NOW.minusDays(1), NOW.plusDays(1), "");
+        admin.openRegistration(t);
+        return t;
+    }
+
+    /** Giải đã sinh lịch với n đội, mọi đơn được duyệt. */
+    private static Tournament ongoing(TournamentFormat format, int teams) throws TournamentException {
+        Admin admin = admin();
+        Tournament t = openTournament(admin, format, teams);
+        for (int i = 0; i < teams; i++) {
+            admin.approveRegistration(managerWithTeam(2, "Valorant").registerTournament(t));
+        }
+        admin.closeRegistration(t);
+        admin.generateSchedule(t);
+        return t;
+    }
+
+    private static void passwordIsHashed() {
+        User u = new TeamManager("TMX", "X", "x@test.vn", "Secret123");
+        check(u.verifyPassword("Secret123"), "mật khẩu đúng phải được chấp nhận");
+        check(!u.verifyPassword("secret123"), "mật khẩu sai phải bị từ chối");
+    }
+
+    private static void roundRobinPairs(int teams, int expectedMatches, int expectedRounds) throws Exception {
+        Tournament t = ongoing(TournamentFormat.ROUND_ROBIN, teams);
+        check(t.getMatches().size() == expectedMatches, "số trận = " + t.getMatches().size());
+        check(t.getMatchesByRound().size() == expectedRounds, "số vòng = " + t.getMatchesByRound().size());
+        Set<String> pairs = new HashSet<>();
+        for (Match m : t.getMatches()) {
+            String a = m.getTeamA().getTeamId();
+            String b = m.getTeamB().getTeamId();
+            check(pairs.add(a.compareTo(b) < 0 ? a + b : b + a), "cặp đấu lặp lại: " + a + "-" + b);
+        }
+        for (List<Match> round : t.getMatchesByRound().values()) {
+            Set<Team> inRound = new HashSet<>();
+            round.forEach(m -> { inRound.add(m.getTeamA()); inRound.add(m.getTeamB()); });
+            check(inRound.size() == round.size() * 2, "một đội đá hai trận trong cùng vòng");
+        }
+    }
+
+    private static void singleEliminationByes() throws Exception {
+        Tournament t = ongoing(TournamentFormat.SINGLE_ELIMINATION, 6);
+        Map<Integer, List<Match>> rounds = t.getMatchesByRound();
+        check(t.getMatches().size() == 5, "6 đội loại trực tiếp phải có 5 trận, có " + t.getMatches().size());
+        check(rounds.get(1).size() == 2 && rounds.get(2).size() == 2 && rounds.get(3).size() == 1, "sai số trận mỗi vòng");
+        long waitingSlots = rounds.get(2).stream().filter(m -> m.getTeamA() == null || m.getTeamB() == null).count();
+        check(waitingSlots == 2, "mỗi trận vòng 2 phải có sẵn 1 đội được bye");
+        rounds.get(1).forEach(m -> check(m.getNextMatch() != null, "trận vòng 1 phải trỏ tới vòng 2"));
+        Match first = rounds.get(1).get(0);
+        first.setResult(2, 0);
+        check(first.getNextMatch().getTeamA() != null && first.getNextMatch().getTeamB() != null,
+                "đội thắng phải được đưa vào trận vòng sau");
+    }
+
+    private static void rankingPoints() throws Exception {
+        Tournament t = ongoing(TournamentFormat.ROUND_ROBIN, 3);
+        List<Match> ms = t.getMatches();
+        ms.get(0).setResult(2, 0);
+        ms.get(1).setResult(1, 1);
+        ms.get(2).setResult(0, 3);
+        int total = t.getRanking().getStandings().stream().mapToInt(RankingEntry::getPoints).sum();
+        check(total == 3 + 3 + 1 + 1, "tổng điểm phải là 8, nhận " + total);
+        List<RankingEntry> s = t.getRanking().getStandings();
+        for (int i = 1; i < s.size(); i++) {
+            check(s.get(i - 1).getPoints() >= s.get(i).getPoints(), "BXH chưa sắp giảm dần theo điểm");
+        }
+    }
+
+    private static void editResultRecalculates() throws Exception {
+        Tournament t = ongoing(TournamentFormat.ROUND_ROBIN, 2);
+        Match m = t.getMatches().get(0);
+        m.setResult(1, 0);
+        // giải 2 đội đã tự kết thúc sau trận duy nhất, Admin vẫn được sửa kết quả
+        m.setResult(0, 2);
+        RankingEntry winner = t.getRanking().findEntry(m.getTeamB()).orElseThrow();
+        RankingEntry loser = t.getRanking().findEntry(m.getTeamA()).orElseThrow();
+        check(winner.getPoints() == 3 && winner.getPlayed() == 1, "đội thắng phải có 3 điểm sau 1 trận");
+        check(loser.getPoints() == 0 && loser.getWins() == 0, "đội thua không được giữ điểm cũ");
+        check(winner.getScoreDifference() == 2, "hiệu số phải là +2");
+    }
+
+    private static void waitingListPromotion() throws Exception {
+        Admin admin = admin();
+        Tournament t = openTournament(admin, TournamentFormat.ROUND_ROBIN, 2);
+        List<TeamManager> ms = new ArrayList<>();
+        List<Registration> rs = new ArrayList<>();
+        for (int i = 0; i < 4; i++) {
+            ms.add(managerWithTeam(2, "Valorant"));
+            rs.add(ms.get(i).registerTournament(t));
+        }
+        check(rs.get(2).getWaitingPosition() == 1 && rs.get(3).getWaitingPosition() == 2, "sai vị trí chờ");
+        ms.get(0).cancelRegistration(rs.get(0));
+        check(rs.get(2).getWaitingPosition() == null, "đơn chờ số 1 phải được nhận slot");
+        check(rs.get(3).getWaitingPosition() == 1, "đơn chờ số 2 phải lên vị trí 1");
+        expect(InvalidStatusTransitionException.class, () -> admin.approveRegistration(rs.get(3)));
+        admin.approveRegistration(rs.get(2));
+        check(rs.get(2).getStatus() == RegistrationStatus.APPROVED, "đơn phải được duyệt");
+    }
+
+    private static void invalidScores() throws Exception {
+        Tournament rr = ongoing(TournamentFormat.ROUND_ROBIN, 2);
+        Match m = rr.getMatches().get(0);
+        expect(InvalidScoreException.class, () -> m.setResult(-1, 0));
+        expect(InvalidScoreException.class, () -> m.setResult(null, 0));
+        check(!m.getStatus().isPlayed(), "trận phải giữ nguyên trạng thái khi tỉ số sai");
+        Tournament se = ongoing(TournamentFormat.SINGLE_ELIMINATION, 2);
+        expect(InvalidScoreException.class, () -> se.getMatches().get(0).setResult(1, 1));
+    }
+
+    private static void registrationErrors() throws Exception {
+        Admin admin = admin();
+        Tournament t = openTournament(admin, TournamentFormat.ROUND_ROBIN, 4);
+        expect(TeamNotEligibleException.class, () -> managerWithTeam(1, "Valorant").registerTournament(t));
+        expect(TeamNotEligibleException.class, () -> managerWithTeam(2, "LoL").registerTournament(t));
+        TeamManager ok = managerWithTeam(2, "Valorant");
+        ok.registerTournament(t);
+        expect(TeamNotEligibleException.class, () -> ok.registerTournament(t));
+        admin.closeRegistration(t);
+        expect(RegistrationClosedException.class, () -> managerWithTeam(2, "Valorant").registerTournament(t));
+        check(t.getRegistrations().get(0).getStatus() == RegistrationStatus.REJECTED,
+                "đơn chưa duyệt phải bị từ chối khi đóng cổng");
+    }
+
+    private static void invalidTransitions() throws Exception {
+        Admin admin = admin();
+        Tournament t = admin.createTournament("T", "Valorant", TournamentFormat.ROUND_ROBIN, 4, 2,
+                NOW.minusDays(1), NOW.plusDays(1), "");
+        expect(InvalidStatusTransitionException.class, () -> t.changeStatus(TournamentStatus.ONGOING));
+        expect(InvalidStatusTransitionException.class, () -> t.changeStatus(TournamentStatus.FINISHED));
+        expect(InvalidStatusTransitionException.class, () -> admin.generateSchedule(t));
+        expect(IllegalArgumentException.class, () -> admin.createTournament("Sai ngày", "Valorant",
+                TournamentFormat.ROUND_ROBIN, 4, 2, NOW, NOW.minusHours(1), ""));
+    }
+
+    private static void tournamentFinishes() throws Exception {
+        Tournament t = ongoing(TournamentFormat.SINGLE_ELIMINATION, 4);
+        for (List<Match> round : t.getMatchesByRound().values()) {
+            for (Match m : round) {
+                m.setResult(3, 1);
+            }
+        }
+        check(t.getStatus() == TournamentStatus.FINISHED, "giải phải tự chuyển sang FINISHED");
+        check(t.getChampion().isPresent(), "phải xác định được nhà vô địch");
+    }
+
+    private static void editAndDeleteOnlyInDraft() throws Exception {
+        DataStore store = new DataStore();
+        TournamentService service = new TournamentService(store);
+        Admin admin = admin();
+        Tournament draft = service.createTournament(admin, "Nháp", "Valorant", TournamentFormat.ROUND_ROBIN, 4, 2,
+                NOW.minusDays(1), NOW.plusDays(1), "");
+        admin.updateTournamentSettings(draft, TournamentFormat.SINGLE_ELIMINATION, 8, 3, NOW, NOW.plusDays(2));
+        check(draft.getMaxTeams() == 8 && draft.getFormat() == TournamentFormat.SINGLE_ELIMINATION, "chưa sửa được cấu hình");
+        admin.openRegistration(draft);
+        expect(InvalidStatusTransitionException.class, () -> admin.updateTournamentSettings(draft,
+                TournamentFormat.ROUND_ROBIN, 4, 2, NOW, NOW.plusDays(1)));
+        expect(InvalidStatusTransitionException.class, () -> service.deleteTournament(admin, draft));
+        Tournament other = service.createTournament(admin, "Xóa được", "Valorant", TournamentFormat.ROUND_ROBIN, 4, 2,
+                NOW, NOW.plusDays(1), "");
+        service.deleteTournament(admin, other);
+        check(store.tournaments().size() == 1, "giải Nháp phải bị xóa khỏi kho");
+    }
+
+    private static void teamSummary() throws Exception {
+        DataStore store = new DataStore();
+        Tournament t = ongoing(TournamentFormat.ROUND_ROBIN, 3);
+        store.tournaments().add(t);
+        List<Match> ms = t.getMatches();
+        Team team = ms.get(0).getTeamA();
+        for (Match m : ms) {
+            if (m.involves(team)) {
+                m.setResult(m.getTeamA() == team ? 2 : 0, m.getTeamA() == team ? 0 : 2);
+            } else {
+                m.setResult(1, 1);
+            }
+        }
+        TournamentService.TeamSummary s = new TournamentService(store).getTeamSummary(team);
+        check(s.getTournaments() == 1 && s.getPlayed() == 2 && s.getWins() == 2, "sai thành tích: " + s);
+        check(s.getTitles() == 1, "đội thắng cả 2 trận phải vô địch: " + s);
+    }
+
+    private static void genericRepository() {
+        Repository<User> users = new Repository<>();
+        users.add(new TeamManager("TM900", "A", "a@test.vn", "Passw0rd"));
+        users.add(new Admin("AD900", "B", "b@test.vn", "Passw0rd"));
+        check(users.findById("tm900").isPresent(), "tìm theo mã không phân biệt hoa thường");
+        check(users.findAllOfType(Admin.class).size() == 1, "lọc theo kiểu con Admin");
+        try {
+            users.add(new Admin("AD900", "C", "c@test.vn", "Passw0rd"));
+            throw new AssertionError("phải chặn trùng mã");
+        } catch (IllegalArgumentException expected) {
+            // trùng mã phải bị chặn
+        }
+    }
+
+    private static void saveAndLoad() throws Exception {
+        DataStore store = new DataStore();
+        Tournament t = ongoing(TournamentFormat.ROUND_ROBIN, 3);
+        t.getMatches().get(0).setResult(2, 1);
+        store.tournaments().add(t);
+        Path file = Files.createTempFile("gtms", ".dat");
+        store.save(file);
+        Tournament copy = DataStore.load(file).tournaments().findById(t.getTournamentId()).orElseThrow();
+        Files.deleteIfExists(file);
+        check(copy.getMatches().size() == 3, "phải nạp lại đủ 3 trận");
+        Match m = copy.getMatches().get(0);
+        check(copy.getRanking().findEntry(m.getTeamA()).isPresent(), "Ranking và Match phải trỏ cùng một Team");
+        check(copy.getRanking().getStandings().get(0).getPoints() == 3, "điểm phải được giữ sau khi nạp");
+    }
+
+    private static void performance32Teams() throws Exception {
+        long start = System.nanoTime();
+        Tournament rr = ongoing(TournamentFormat.ROUND_ROBIN, 32);
+        for (Match m : rr.getMatches()) {
+            m.setResult(1, 0);
+        }
+        Tournament se = ongoing(TournamentFormat.SINGLE_ELIMINATION, 32);
+        long ms = (System.nanoTime() - start) / 1_000_000;
+        check(rr.getMatches().size() == 496, "32 đội vòng tròn phải có 496 trận");
+        check(se.getMatches().size() == 31, "32 đội loại trực tiếp phải có 31 trận");
+        check(ms < 2000, "mất " + ms + " ms");
+        System.out.println("       (sinh 2 lịch 32 đội + ghi 496 kết quả: " + ms + " ms)");
+    }
+}
