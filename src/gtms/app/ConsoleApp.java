@@ -67,7 +67,13 @@ public class ConsoleApp {
                 System.out.println("Đã nạp dữ liệu từ " + DATA_FILE);
                 return store;
             } catch (IOException e) {
-                System.out.println("Không đọc được file dữ liệu (" + e.getMessage() + "), dùng dữ liệu mẫu.");
+                System.out.println("Không đọc được file dữ liệu (" + e.getMessage() + ").");
+                try {
+                    System.out.println("Đã giữ lại file cũ ở " + DataStore.backupBroken(DATA_FILE) + ", dùng dữ liệu mẫu.");
+                } catch (IOException moveError) {
+                    // không đổi tên được thì dừng, tránh ghi đè lên file cũ khi thoát
+                    throw new IllegalStateException("Không sao lưu được file dữ liệu hỏng: " + moveError.getMessage());
+                }
             }
         }
         System.out.println("Khởi tạo dữ liệu mẫu. Mật khẩu mặc định: " + SampleData.DEFAULT_PASSWORD);
@@ -84,6 +90,9 @@ public class ConsoleApp {
             System.out.println("  ! Dữ liệu không hợp lệ: " + e.getMessage());
         } catch (IOException e) {
             System.out.println("  ! Lỗi đọc/ghi file: " + e.getMessage());
+        } catch (RuntimeException e) {
+            // lỗi lập trình chưa lường trước: báo ra rồi quay lại menu, để khi thoát dữ liệu vẫn được lưu
+            System.out.println("  ! Lỗi không mong đợi: " + e);
         }
     }
 
@@ -137,6 +146,15 @@ public class ConsoleApp {
         Printer.schedule(t);
         String id = in.text("Mã trận: ");
         return t.findMatch(id).orElseThrow(() -> new IllegalArgumentException("Không tìm thấy trận " + id));
+    }
+
+    /** Trận vòng sau của nhánh loại trực tiếp có thể chưa có đội; phải chặn trước khi hỏi tỉ số. */
+    private Match pickPlayableMatch(Tournament t) {
+        Match m = pickMatch(t);
+        if (m.getTeamA() == null || m.getTeamB() == null) {
+            throw new IllegalStateException("Trận " + m.getMatchId() + " chưa xác định đủ hai đội");
+        }
+        return m;
     }
 
     private Team requireTeam(TeamManager me) throws TournamentException {
@@ -289,7 +307,7 @@ public class ConsoleApp {
                     System.out.println("Đã bắt đầu: " + m);
                 }); break;
                 case 12: execute(() -> {
-                    Match m = pickMatch(pickTournament());
+                    Match m = pickPlayableMatch(pickTournament());
                     if (m.getStatus() == MatchStatus.FINISHED
                             && !in.confirm("Trận đã có kết quả " + m.getScoreA() + "-" + m.getScoreB()
                             + ". Sửa lại và tính lại bảng xếp hạng?")) {
@@ -301,7 +319,7 @@ public class ConsoleApp {
                     Printer.standings(m.getTournament());
                 }); break;
                 case 13: execute(() -> {
-                    Match m = pickMatch(pickTournament());
+                    Match m = pickPlayableMatch(pickTournament());
                     boolean teamALoses = in.confirm(m.getTeamA().getTeamName() + " bỏ cuộc? (n = " + m.getTeamB().getTeamName() + ")");
                     me.recordWalkover(m, teamALoses ? m.getTeamA() : m.getTeamB());
                     System.out.println("Đã ghi: " + m);

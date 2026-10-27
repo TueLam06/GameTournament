@@ -6,7 +6,7 @@ Yêu cầu: JDK 17 trở lên (đã chạy thử với JDK 21). Không dùng th�
 javac -encoding UTF-8 -d out $(find src -name "*.java")
 java -cp out gtms.app.ConsoleApp          # chương trình console tương tác
 java -cp out gtms.app.ConsoleApp demo     # kịch bản demo tự động
-java -cp out gtms.app.ConsoleApp test     # bộ kiểm thử lõi (16 test)
+java -cp out gtms.app.ConsoleApp test     # bộ kiểm thử lõi (21 test)
 ```
 
 Giao diện Swing để chạy thử: bấm đúp `gui/build.bat` (xem [gui/README.md](gui/README.md)). Thư mục `gui/` tách riêng, khi nộp có thể xóa.

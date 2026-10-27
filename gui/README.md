@@ -28,6 +28,8 @@ java -jar gui/build/GameTournamentGUI.jar
 - Bấm **Đăng nhập**, chọn email trong danh sách (mật khẩu mẫu đã điền sẵn `Ptit@2026`). Hàng nút **Thao tác** ở dưới đổi theo vai trò:
   - Admin: tạo, mở, đóng, hủy, xóa giải; duyệt, từ chối đơn (chọn đơn trong tab Đơn đăng ký); sinh lịch; nhập kết quả, xử thua (chọn trận trong tab Lịch thi đấu); xuất CSV; khóa tài khoản.
   - Đội trưởng: tạo đội, thêm, xóa tuyển thủ; đăng ký giải đang chọn và chọn đội hình; hủy đăng ký; xem thành tích.
-- **Chạy test**, **Chạy demo**: chạy bộ 16 test hoặc kịch bản demo và hiện kết quả trong cửa sổ.
+- **Chạy test**, **Chạy demo**: chạy bộ 21 test hoặc kịch bản demo và hiện kết quả trong cửa sổ.
 - **Về dữ liệu mẫu**: xóa dữ liệu đang có, quay lại dữ liệu ban đầu.
 - Dữ liệu tự lưu vào `data/gtms.dat` khi đóng cửa sổ, dùng chung với bản console.
+
+Giao diện này chưa có: sửa giải, sửa đội, sửa tuyển thủ, giải thể đội, tìm và lọc giải. Các chức năng đó dùng bản console.

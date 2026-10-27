@@ -1,5 +1,7 @@
 package gtms.test;
 
+import gtms.app.DemoScenario;
+import gtms.app.SampleData;
 import gtms.exception.InvalidScoreException;
 import gtms.exception.InvalidStatusTransitionException;
 import gtms.exception.RegistrationClosedException;
@@ -22,6 +24,9 @@ import gtms.repository.Repository;
 import gtms.service.TournamentService;
 import gtms.util.AppClock;
 
+import java.io.ByteArrayOutputStream;
+import java.io.PrintStream;
+import java.nio.charset.StandardCharsets;
 import java.nio.file.Files;
 import java.nio.file.Path;
 import java.time.LocalDateTime;
@@ -64,6 +69,11 @@ public final class CoreTests {
         tests.put("Repository generic: tìm theo mã, lọc theo kiểu con", CoreTests::genericRepository);
         tests.put("Lưu và nạp lại file dữ liệu giữ nguyên tham chiếu", CoreTests::saveAndLoad);
         tests.put("NFR-01: sinh lịch 32 đội + BXH dưới 2 giây", CoreTests::performance32Teams);
+        tests.put("Không xóa được tuyển thủ có tên trong đơn còn hiệu lực", CoreTests::rosterPlayerCannotLeave);
+        tests.put("Hủy giải thì đơn hủy theo, đội giải thể được", CoreTests::cancelledTournamentReleasesTeams);
+        tests.put("Sửa cấu hình bị lỗi thì giữ nguyên cấu hình cũ", CoreTests::failedSettingsChangeKeepsOldValues);
+        tests.put("File dữ liệu hỏng được giữ lại, không bị ghi đè", CoreTests::brokenFileIsBackedUp);
+        tests.put("Demo chạy được khi đã có dữ liệu mẫu trước đó", CoreTests::demoRunsAfterSampleData);
 
         int passed = 0;
         for (Map.Entry<String, TestCase> test : tests.entrySet()) {
@@ -294,6 +304,83 @@ public final class CoreTests {
         TournamentService.TeamSummary s = new TournamentService(store).getTeamSummary(team);
         check(s.getTournaments() == 1 && s.getPlayed() == 2 && s.getWins() == 2, "sai thành tích: " + s);
         check(s.getTitles() == 1, "đội thắng cả 2 trận phải vô địch: " + s);
+    }
+
+    private static void rosterPlayerCannotLeave() throws Exception {
+        TournamentService service = new TournamentService(new DataStore());
+        Admin admin = service.addAdmin("Admin", "roster-admin@test.vn", "Passw0rd");
+        TeamManager manager = service.registerAccount("Manager", "roster-tm@test.vn", "Passw0rd");
+        service.createTeam(manager, "Roster Team", "", "HN", "Valorant");
+        List<Player> players = new ArrayList<>();
+        for (int i = 0; i < 3; i++) {
+            players.add(service.addNewPlayer(manager, "r" + i, "Player " + i, "Flex", "G" + i));
+        }
+        Tournament t = service.createTournament(admin, "Roster Cup", "Valorant", TournamentFormat.ROUND_ROBIN, 4, 2,
+                NOW.minusDays(1), NOW.plusDays(1), "");
+        admin.openRegistration(t);
+        admin.approveRegistration(manager.registerTournament(t, players.subList(0, 2)));
+        expect(TournamentException.class, () -> service.removePlayer(manager, players.get(0).getPlayerId()));
+        service.removePlayer(manager, players.get(2).getPlayerId());
+        check(manager.getManagedTeam().getPlayers().size() == 2, "tuyển thủ dự bị phải xóa được, người trong đơn thì không");
+    }
+
+    private static void cancelledTournamentReleasesTeams() throws Exception {
+        TournamentService service = new TournamentService(new DataStore());
+        Admin admin = service.addAdmin("Admin", "cancel-admin@test.vn", "Passw0rd");
+        TeamManager manager = service.registerAccount("Manager", "cancel-tm@test.vn", "Passw0rd");
+        service.createTeam(manager, "Cancel Team", "", "HN", "Valorant");
+        for (int i = 0; i < 2; i++) {
+            service.addNewPlayer(manager, "c" + i, "Player " + i, "Flex", "G" + i);
+        }
+        Tournament t = service.createTournament(admin, "Cancel Cup", "Valorant", TournamentFormat.ROUND_ROBIN, 4, 2,
+                NOW.minusDays(1), NOW.plusDays(1), "");
+        admin.openRegistration(t);
+        Registration r = manager.registerTournament(t);
+        admin.approveRegistration(r);
+        admin.cancelTournament(t);
+        check(r.getStatus() == RegistrationStatus.CANCELLED, "đơn phải bị hủy cùng giải");
+        service.disbandTeam(manager);
+        check(!manager.hasActiveTeam(), "đội phải giải thể được sau khi giải bị hủy");
+    }
+
+    private static void failedSettingsChangeKeepsOldValues() throws Exception {
+        Admin admin = admin();
+        Tournament t = admin.createTournament("Cấu hình", "Valorant", TournamentFormat.SINGLE_ELIMINATION, 8, 5,
+                NOW.minusDays(1), NOW.plusDays(1), "");
+        expect(IllegalArgumentException.class, () -> admin.updateTournamentSettings(t, TournamentFormat.ROUND_ROBIN,
+                16, 0, NOW, NOW.plusDays(2)));
+        check(t.getFormat() == TournamentFormat.SINGLE_ELIMINATION && t.getMaxTeams() == 8 && t.getTeamSize() == 5,
+                "cấu hình bị đổi một phần: " + t.getFormat() + ", " + t.getMaxTeams() + ", " + t.getTeamSize());
+    }
+
+    private static void brokenFileIsBackedUp() throws Exception {
+        Path dir = Files.createTempDirectory("gtms");
+        Path file = dir.resolve("gtms.dat");
+        Files.writeString(file, "không phải dữ liệu");
+        expect(java.io.IOException.class, () -> DataStore.load(file));
+        Path backup = DataStore.backupBroken(file);
+        check(!Files.exists(file) && Files.readString(backup).equals("không phải dữ liệu"), "file hỏng phải được giữ lại");
+        new DataStore().save(file);
+        check(DataStore.load(file) != null && Files.exists(backup), "lưu mới không được ghi đè lên bản sao lưu");
+        Files.delete(file);
+        Files.delete(backup);
+        Files.delete(dir);
+    }
+
+    private static void demoRunsAfterSampleData() throws Exception {
+        PrintStream original = System.out;
+        ByteArrayOutputStream output = new ByteArrayOutputStream();
+        try {
+            SampleData.create();          // giống GUI: đã có dữ liệu mẫu nên bộ sinh mã không còn bắt đầu từ 1
+            System.setOut(new PrintStream(output, true, StandardCharsets.UTF_8));
+            DemoScenario.run();
+        } finally {
+            System.setOut(original);
+            AppClock.setFixed(NOW);       // demo trả đồng hồ về giờ thật, các test sau cần giờ cố định
+        }
+        String text = output.toString(StandardCharsets.UTF_8);
+        check(!text.contains("KHÔNG LỖI?"), "có bước demo lẽ ra phải báo lỗi nhưng không báo");
+        check(text.contains("NEW_ACE"), "demo phải chạy đến bước cuối");
     }
 
     private static void genericRepository() {

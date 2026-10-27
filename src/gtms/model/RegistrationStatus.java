@@ -17,6 +17,7 @@ public enum RegistrationStatus {
         switch (this) {
             case PENDING:  return next == APPROVED || next == REJECTED || next == CANCELLED;
             case APPROVED: return next == LOCKED || next == CANCELLED;
+            case LOCKED:   return next == CANCELLED; // chỉ xảy ra khi cả giải bị hủy
             default:       return false;
         }
     }

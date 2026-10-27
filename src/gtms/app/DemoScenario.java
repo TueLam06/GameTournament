@@ -150,9 +150,11 @@ public final class DemoScenario {
         service.deleteTournament(admin, draft);
         System.out.println("Đã xóa giải Nháp " + draft.getTournamentId() + ", còn " + store.tournaments().size() + " giải");
         expectError("Đổi tên đội trùng đội khác", () -> service.updateTeam(newbie, "Hanoi Wolves", "", "Hà Nội"));
-        newbie.updatePlayer("P031", "NEW_ACE", "Duelist");
+        // lấy mã từ đối tượng: mã sinh ra phụ thuộc dữ liệu đã tạo trước đó (ví dụ khi chạy demo trong GUI)
+        String firstNewbieId = small.getPlayers().get(0).getPlayerId();
+        newbie.updatePlayer(firstNewbieId, "NEW_ACE", "Duelist");
         service.disbandTeam(newbie);
-        System.out.println("Sửa tuyển thủ P031 thành NEW_ACE rồi giải thể Newbie Squad: " + small);
+        System.out.println("Sửa tuyển thủ " + firstNewbieId + " thành NEW_ACE rồi giải thể Newbie Squad: " + small);
         System.out.println("Thống kê giải theo trạng thái: " + service.countByStatus());
         expectError("Tạo giải có hạn đóng trước ngày mở", () -> service.createTournament(admin, "Lỗi", "Valorant",
                 TournamentFormat.ROUND_ROBIN, 4, 5, now, now.minusDays(1), ""));

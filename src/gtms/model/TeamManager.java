@@ -78,7 +78,8 @@ public class TeamManager extends User {
         Team team = requireTeam();
         boolean stillPlaying = tournaments.stream()
                 .anyMatch(t -> t.findActiveRegistration(team).isPresent()
-                        && t.getStatus() != TournamentStatus.FINISHED);
+                        && t.getStatus() != TournamentStatus.FINISHED
+                        && t.getStatus() != TournamentStatus.CANCELLED);
         if (stillPlaying) {
             throw new TournamentException("Đội đang tham gia giải, không thể giải thể");
         }

@@ -25,6 +25,7 @@ import java.util.ArrayList;
 import java.util.Comparator;
 import java.util.List;
 import java.util.Map;
+import java.util.Optional;
 import java.util.function.Function;
 import java.util.stream.Collectors;
 
@@ -101,14 +102,26 @@ public class TournamentService {
         return player;
     }
 
-    /** Không cho xóa tuyển thủ khi đội đang thi đấu ở một giải. */
+    /**
+     * Không cho xóa tuyển thủ khi đội đang thi đấu, hoặc khi người đó có tên trong một đơn đăng ký còn hiệu lực:
+     * nếu không, tuyển thủ có thể sang đội khác và có tên trong hai đội ở cùng một giải.
+     */
     public Player removePlayer(TeamManager manager, String playerId) throws TournamentException {
         Team team = manager.getManagedTeam();
-        boolean playing = store.tournaments().findAll().stream()
-                .filter(t -> t.getStatus() == TournamentStatus.ONGOING)
-                .anyMatch(t -> t.getConfirmedTeams().contains(team));
-        if (playing) {
-            throw new TournamentException("Đội đang thi đấu, phải hoàn tất giải trước khi xóa tuyển thủ");
+        for (Tournament t : store.tournaments().findAll()) {
+            if (t.getStatus() == TournamentStatus.ONGOING && t.getConfirmedTeams().contains(team)) {
+                throw new TournamentException("Đội đang thi đấu, phải hoàn tất giải trước khi xóa tuyển thủ");
+            }
+            if (t.getStatus() == TournamentStatus.FINISHED) {
+                continue;
+            }
+            Optional<Registration> inRoster = t.findActiveRegistration(team).filter(r ->
+                    r.getRegisteredPlayers().stream().anyMatch(p -> p.getPlayerId().equals(playerId)));
+            if (inRoster.isPresent()) {
+                throw new TournamentException("Tuyển thủ " + playerId + " có tên trong đơn "
+                        + inRoster.get().getRegistrationId() + " của giải " + t.getName()
+                        + "; hãy hủy đơn hoặc chờ giải kết thúc");
+            }
         }
         return manager.removePlayer(playerId);
     }

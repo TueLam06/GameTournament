@@ -63,7 +63,7 @@ GameTournament/src/gtms/
 ├── service/     TournamentService: kiểm tra trùng email, trùng tên đội, tìm kiếm, lịch sử
 ├── util/        AppClock, IdGenerator, PasswordUtil, Validator
 ├── app/         ConsoleApp (menu), DemoScenario, SampleData
-└── test/        CoreTests (16 test)
+└── test/        CoreTests (21 test)
 
 GameTournament/gui/  Giao diện Swing để chạy thử, KHÔNG nộp. Xóa cả thư mục khi nộp bài.
 ```
@@ -75,7 +75,7 @@ cd GameTournament
 javac -encoding UTF-8 -d out $(find src -name "*.java")
 java -cp out gtms.app.ConsoleApp          # dùng bằng menu
 java -cp out gtms.app.ConsoleApp demo     # demo tự động
-java -cp out gtms.app.ConsoleApp test     # chạy 16 test
+java -cp out gtms.app.ConsoleApp test     # chạy 21 test
 ```
 
 Muốn bấm chuột cho nhanh: bấm đúp `gui/build.bat` (Windows) hoặc chạy `bash gui/build.sh`. Script build ra `gui/build/GameTournamentGUI.jar` rồi mở giao diện. Hướng dẫn chi tiết ở `gui/README.md`.
@@ -91,12 +91,15 @@ Tài khoản mẫu, mật khẩu chung `Ptit@2026`:
 - Thứ tự đăng ký là thứ tự hạt giống ở thể thức loại trực tiếp.
 - Hết slot thì đơn vào danh sách chờ; có đội hủy thì đơn chờ đầu tiên được lên.
 - Chỉ sửa cấu hình hoặc xóa giải khi giải còn Nháp.
+- Tuyển thủ có tên trong đơn đăng ký còn hiệu lực thì không xóa khỏi đội được.
+- Hủy giải thì mọi đơn còn hiệu lực của giải đó cũng bị hủy.
+- File dữ liệu hỏng được đổi tên thành `gtms.dat.hong-<thời điểm>` thay vì bị ghi đè.
 
 Nếu nhóm muốn đổi quy tắc nào thì báo để sửa cả mã lẫn báo cáo.
 
 ## 6. Khi sửa mã
 
-- Chạy `test` trước khi gửi code cho nhóm; phải đạt 16/16.
+- Chạy `test` trước khi gửi code cho nhóm; phải đạt 21/21.
 - Lỗi vi phạm luật giải: ném `TournamentException` hoặc lớp con. Lỗi dữ liệu nhập (trống, sai định dạng): ném `IllegalArgumentException`.
 - Sửa cấu trúc một lớp trong `model` thì xóa `data/gtms.dat`, vì file cũ có thể không đọc được nữa.
 

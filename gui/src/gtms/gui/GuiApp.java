@@ -126,6 +126,16 @@ public class GuiApp extends JFrame {
         try {
             store = Files.exists(DATA_FILE) ? DataStore.load(DATA_FILE) : sampleData();
         } catch (IOException e) {
+            String message = "Không đọc được " + DATA_FILE + " (" + e.getMessage() + ").";
+            try {
+                message += "\nFile cũ được giữ lại ở " + DataStore.backupBroken(DATA_FILE) + ".\nChương trình dùng dữ liệu mẫu.";
+            } catch (IOException moveError) {
+                // không đổi tên được thì thoát, tránh ghi đè lên file cũ khi đóng cửa sổ
+                JOptionPane.showMessageDialog(null, message + "\nKhông sao lưu được file, chương trình sẽ thoát.",
+                        "Lỗi dữ liệu", JOptionPane.ERROR_MESSAGE);
+                System.exit(1);
+            }
+            JOptionPane.showMessageDialog(null, message, "Lỗi dữ liệu", JOptionPane.WARNING_MESSAGE);
             store = sampleData();
         }
         service = new TournamentService(store);

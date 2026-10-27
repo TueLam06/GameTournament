@@ -62,10 +62,13 @@ public class Tournament implements Identifiable, Serializable {
         if (!end.isAfter(start)) {
             throw new IllegalArgumentException("Thời điểm đóng đăng ký phải sau thời điểm mở đăng ký");
         }
+        // kiểm tra hết rồi mới gán, để khi báo lỗi giải vẫn giữ nguyên cấu hình cũ
+        Validator.requireMin(maxTeams, 2, "maxTeams");
+        Validator.requireMin(teamSize, 1, "teamSize");
         this.format = format;
         this.scheduleStrategy = format.getStrategy();
-        this.maxTeams = Validator.requireMin(maxTeams, 2, "maxTeams");
-        this.teamSize = Validator.requireMin(teamSize, 1, "teamSize");
+        this.maxTeams = maxTeams;
+        this.teamSize = teamSize;
         this.registrationStart = start;
         this.registrationEnd = end;
     }
@@ -189,6 +192,14 @@ public class Tournament implements Identifiable, Serializable {
             throw new InvalidStatusTransitionException("Giải còn trận chưa có kết quả");
         }
         status = next;
+        if (next == TournamentStatus.CANCELLED) {
+            // giải hủy thì các đơn còn hiệu lực cũng hủy theo, để đội không bị coi là vẫn đang dự giải
+            for (Registration r : registrations) {
+                if (r.isActive()) {
+                    r.cancelByTournament();
+                }
+            }
+        }
     }
 
     public void openRegistration() throws InvalidStatusTransitionException {

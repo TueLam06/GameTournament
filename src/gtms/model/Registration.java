@@ -64,6 +64,12 @@ public class Registration implements Identifiable, Serializable {
         tournament.onRegistrationReleased(heldSlot);
     }
 
+    /** Tournament gọi khi giải bị hủy; không cần kiểm tra hạn đăng ký như cancel(). */
+    void cancelByTournament() throws InvalidStatusTransitionException {
+        transitionTo(RegistrationStatus.CANCELLED);
+        waitingPosition = null;
+    }
+
     public void lock() throws InvalidStatusTransitionException {
         transitionTo(RegistrationStatus.LOCKED);
     }

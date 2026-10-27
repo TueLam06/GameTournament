@@ -58,7 +58,7 @@ public abstract class User implements Identifiable, Serializable {
         }
     }
 
-    // Không để public: chỉ Admin (cùng package) được khóa/mở khóa
+    // Phạm vi package: code ngoài gtms.model không gọi được; trong package chỉ Admin dùng để khóa/mở khóa
     void setAccountStatus(AccountStatus status) {
         this.accountStatus = status;
     }

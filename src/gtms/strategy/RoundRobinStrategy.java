@@ -8,7 +8,7 @@ import java.util.ArrayList;
 import java.util.Collections;
 import java.util.List;
 
-/** Vòng tròn một lượt: n đội đá n-1 vòng, mỗi cặp gặp nhau đúng một lần. */
+/** Vòng tròn một lượt, mỗi cặp gặp nhau đúng một lần: n chẵn thì n-1 vòng, n lẻ thì n vòng (mỗi đội nghỉ một vòng). */
 public class RoundRobinStrategy implements ScheduleStrategy {
     private static final long serialVersionUID = 1L;
 

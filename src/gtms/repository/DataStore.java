@@ -12,6 +12,9 @@ import java.io.ObjectOutputStream;
 import java.io.Serializable;
 import java.nio.file.Files;
 import java.nio.file.Path;
+import java.nio.file.StandardCopyOption;
+import java.time.LocalDateTime;
+import java.time.format.DateTimeFormatter;
 import java.util.HashMap;
 import java.util.Map;
 
@@ -28,15 +31,23 @@ public class DataStore implements Serializable {
     private final Repository<Tournament> tournaments = new Repository<>();
     private Map<String, Integer> idCounters = new HashMap<>();
 
+    /** Ghi ra file tạm rồi mới thay file thật, để lỗi giữa chừng không làm hỏng file đang có. */
     public void save(Path file) throws IOException {
         idCounters = IdGenerator.snapshot();
         Path parent = file.toAbsolutePath().getParent();
-        if (parent != null) {
-            Files.createDirectories(parent);
-        }
-        try (ObjectOutputStream out = new ObjectOutputStream(Files.newOutputStream(file))) {
+        Files.createDirectories(parent);
+        Path temp = parent.resolve(file.getFileName() + ".tmp");
+        try (ObjectOutputStream out = new ObjectOutputStream(Files.newOutputStream(temp))) {
             out.writeObject(this);
         }
+        Files.move(temp, file, StandardCopyOption.REPLACE_EXISTING);
+    }
+
+    /** Đổi tên file không đọc được thành *.hong-<thời điểm> để lần lưu sau không ghi đè lên nó. */
+    public static Path backupBroken(Path file) throws IOException {
+        String stamp = LocalDateTime.now().format(DateTimeFormatter.ofPattern("yyyyMMdd-HHmmss"));
+        Path backup = file.resolveSibling(file.getFileName() + ".hong-" + stamp);
+        return Files.move(file, backup);
     }
 
     public static DataStore load(Path file) throws IOException {

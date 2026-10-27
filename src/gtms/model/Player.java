@@ -28,7 +28,7 @@ public class Player implements Identifiable, Serializable {
         this.position = Validator.requireText(position, "position");
     }
 
-    // Không để public: chỉ Team (cùng package) được gán hoặc gỡ đội
+    // Phạm vi package: code ngoài gtms.model không gọi được; trong package chỉ Team dùng để gán/gỡ đội
     void joinTeam(String teamId) { this.currentTeamId = teamId; }
     void leaveTeam() { this.currentTeamId = null; }
 
