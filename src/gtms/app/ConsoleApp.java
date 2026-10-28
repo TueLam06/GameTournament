@@ -20,6 +20,7 @@ import java.nio.charset.StandardCharsets;
 import java.nio.file.Files;
 import java.nio.file.Path;
 import java.nio.file.Paths;
+import java.util.Optional;
 import java.util.Scanner;
 
 /** Chương trình console. Chạy "demo" để xem kịch bản tự động, "test" để chạy kiểm thử. */
@@ -102,7 +103,7 @@ public class ConsoleApp {
                 case 1: execute(this::login); break;
                 case 2: execute(() -> {
                     TeamManager m = service.registerAccount(in.text("Họ tên: "), in.text("Email: "),
-                            in.text("Mật khẩu (>= 8 ký tự, có chữ và số): "));
+                            in.text("Mật khẩu (ít nhất 6 ký tự): "));
                     System.out.println("Tạo tài khoản thành công: " + m.getUserId());
                 }); break;
                 case 3: execute(this::searchTournaments); break;
@@ -224,7 +225,11 @@ public class ConsoleApp {
         System.out.printf("Điều kiện: game %s, %d tuyển thủ/đội, hạn đăng ký đến %s, đã dùng %d/%d slot%n",
                 t.getGame(), t.getTeamSize(), t.getRegistrationEnd().format(ConsoleInput.DATE_TIME),
                 t.countOccupiedSlots(), t.getMaxTeams());
-        System.out.println("Đội của bạn " + (t.canRegister(team) ? "đủ điều kiện đăng ký" : "chưa đủ điều kiện"));
+        Optional<String> problem = t.registrationProblem(team);
+        if (problem.isPresent()) {
+            throw new TournamentException(problem.get());
+        }
+        System.out.println("Đội của bạn đủ điều kiện đăng ký");
         Printer.team(team);
         if (!in.confirm("Đăng ký cả đội vào giải " + t.getName() + "?")) {
             return;

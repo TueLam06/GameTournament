@@ -21,11 +21,11 @@ public class Team implements Identifiable, Serializable {
     private final List<Player> players = new ArrayList<>();
 
     public Team(String teamId, String teamName, String logo, String region, String game) {
-        this.teamId = Validator.requireText(teamId, "teamId");
-        this.teamName = Validator.requireText(teamName, "teamName");
+        this.teamId = Validator.requireText(teamId, "mã đội");
+        this.teamName = Validator.requireText(teamName, "tên đội");
         this.logo = logo == null ? "" : logo.trim();
-        this.region = Validator.requireText(region, "region");
-        this.game = Validator.requireText(game, "game");
+        this.region = Validator.requireText(region, "khu vực");
+        this.game = Validator.requireText(game, "tựa game");
     }
 
     public void addPlayer(Player player) throws TournamentException {
@@ -73,9 +73,9 @@ public class Team implements Identifiable, Serializable {
 
     public void updateInfo(String teamName, String logo, String region) throws TournamentException {
         ensureActive();
-        this.teamName = Validator.requireText(teamName, "teamName");
+        this.teamName = Validator.requireText(teamName, "tên đội");
         this.logo = logo == null ? "" : logo.trim();
-        this.region = Validator.requireText(region, "region");
+        this.region = Validator.requireText(region, "khu vực");
     }
 
     private void ensureActive() throws TournamentException {

@@ -337,7 +337,7 @@ public class GuiApp extends JFrame {
         JTextField email = new JTextField();
         JPasswordField password = new JPasswordField();
         if (form("Đăng ký tài khoản đội trưởng", "Họ tên", name, "Email", email,
-                "Mật khẩu (>= 8 ký tự, có chữ và số)", password)) {
+                "Mật khẩu (ít nhất 6 ký tự)", password)) {
             TeamManager m = service.registerAccount(name.getText(), email.getText(), new String(password.getPassword()));
             info("Đã tạo tài khoản " + m.getUserId() + ". Hãy đăng nhập.");
         }
@@ -473,10 +473,14 @@ public class GuiApp extends JFrame {
             throw new TournamentException("Bạn chưa có đội, hãy tạo đội trước");
         }
         Team team = manager.getManagedTeam();
+        Optional<String> problem = t.registrationProblem(team);
+        if (problem.isPresent()) {
+            throw new TournamentException(problem.get());
+        }
         if (confirm("<html>Giải yêu cầu " + t.getTeamSize() + " tuyển thủ, đã dùng "
                 + t.countOccupiedSlots() + "/" + t.getMaxTeams() + " slot. Đội " + team.getTeamName() + " có "
-                + team.getPlayers().size() + " tuyển thủ, " + (t.canRegister(team) ? "đủ" : "<b>chưa đủ</b>")
-                + " điều kiện.<br>Đăng ký cả đội vào giải " + t.getName() + "?</html>")) {
+                + team.getPlayers().size() + " tuyển thủ, đủ điều kiện.<br>Đăng ký cả đội vào giải "
+                + t.getName() + "?</html>")) {
             Registration r = manager.registerTournament(t);
             info("Đã gửi đơn " + r.getRegistrationId());
         }

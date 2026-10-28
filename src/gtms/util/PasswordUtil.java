@@ -30,10 +30,8 @@ public final class PasswordUtil {
         }
     }
 
-    /** Ít nhất 8 ký tự, có cả chữ và số. */
+    /** Ít nhất 6 ký tự. */
     public static boolean isStrong(String password) {
-        return password != null && password.length() >= 8
-                && password.chars().anyMatch(Character::isLetter)
-                && password.chars().anyMatch(Character::isDigit);
+        return password != null && password.length() >= 6;
     }
 }

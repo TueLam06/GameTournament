@@ -86,10 +86,11 @@ Tài khoản mẫu, mật khẩu chung `Ptit@2026`:
 
 ## 5. Quy tắc đã chốt trong mã
 
-- Mật khẩu ít nhất 8 ký tự, có cả chữ và số.
+- Mật khẩu ít nhất 6 ký tự; email chỉ cần không để trống.
 - Thắng 3, hòa 1, thua 0. Bằng điểm thì xét hiệu số, rồi số trận thắng. Đội bỏ cuộc thua 0-1.
 - Loại trực tiếp: số đội phải là 2, 4, 8, 16...; vòng 1 ghép theo thứ tự đăng ký (1-2, 3-4...). Kết quả đã ghi thì không sửa được (vòng tròn thì sửa được).
 - Đăng ký cả đội, không chọn riêng đội hình. Mỗi đơn còn hiệu lực chiếm một slot; hết slot thì không nhận đơn. Đơn bị hủy hoặc từ chối thì trả lại slot.
+- Đóng đăng ký chỉ được khi có ít nhất 2 đội đã duyệt (loại trực tiếp: đúng 2, 4, 8, 16... đội), để giải luôn sinh được lịch. Đã đóng thì không mở lại được.
 - Chỉ sửa cấu hình hoặc xóa giải khi giải còn Nháp.
 - Đội còn đơn đăng ký hiệu lực ở giải chưa kết thúc thì không xóa tuyển thủ được.
 - Hủy giải thì mọi đơn còn hiệu lực của giải đó cũng bị hủy.
@@ -100,7 +101,7 @@ Nếu nhóm muốn đổi quy tắc nào thì báo để sửa cả mã lẫn b�
 ## 6. Khi sửa mã
 
 - Chạy `test` trước khi gửi code cho nhóm; phải đạt 21/21.
-- Lỗi vi phạm luật giải: ném `TournamentException` hoặc lớp con. Lỗi dữ liệu nhập (trống, sai định dạng): ném `IllegalArgumentException`.
+- Lỗi vi phạm luật giải: ném `TournamentException` hoặc lớp con. Lỗi dữ liệu nhập (để trống, số nhỏ hơn mức tối thiểu): ném `IllegalArgumentException`.
 - Sửa cấu trúc một lớp trong `model` thì xóa `data/gtms.dat`, vì file cũ có thể không đọc được nữa.
 
 ## 7. Việc còn lại

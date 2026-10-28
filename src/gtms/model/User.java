@@ -19,11 +19,11 @@ public abstract class User implements Identifiable, Serializable {
     private transient boolean loggedIn;
 
     protected User(String userId, String name, String email, String rawPassword) {
-        this.userId = Validator.requireText(userId, "userId");
-        this.name = Validator.requireText(name, "name");
-        this.email = Validator.requireEmail(email);
+        this.userId = Validator.requireText(userId, "mã tài khoản");
+        this.name = Validator.requireText(name, "họ tên");
+        this.email = Validator.requireText(email, "email").toLowerCase();
         if (!PasswordUtil.isStrong(rawPassword)) {
-            throw new IllegalArgumentException("Mật khẩu phải có ít nhất 8 ký tự, gồm cả chữ và số");
+            throw new IllegalArgumentException("Mật khẩu phải có ít nhất 6 ký tự");
         }
         this.salt = PasswordUtil.newSalt();
         this.passwordHash = PasswordUtil.hash(rawPassword, salt);

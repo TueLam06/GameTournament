@@ -53,15 +53,15 @@ public final class CoreTests {
     public static boolean runAll() {
         AppClock.setFixed(NOW);
         Map<String, TestCase> tests = new LinkedHashMap<>();
-        tests.put("Mật khẩu được băm, xác thực đúng/sai", CoreTests::passwordIsHashed);
+        tests.put("Mật khẩu băm, đủ 6 ký tự; email không trống", CoreTests::passwordIsHashed);
         tests.put("Round Robin 4 đội: 6 trận, 3 vòng, mỗi cặp gặp 1 lần", () -> roundRobinPairs(4, 6, 3));
         tests.put("Round Robin 5 đội (lẻ, có bye): 10 trận, 5 vòng", () -> roundRobinPairs(5, 10, 5));
-        tests.put("Single Elimination 8 đội: 7 trận, 3 vòng; 6 đội bị chặn", CoreTests::singleEliminationBracket);
+        tests.put("Single Elimination 8 đội: 7 trận, 3 vòng; 6 đội không đóng được", CoreTests::singleEliminationBracket);
         tests.put("BXH: thắng 3 / hòa 1 / thua 0, sắp xếp đúng", CoreTests::rankingPoints);
         tests.put("Sửa kết quả không cộng điểm hai lần", CoreTests::editResultRecalculates);
         tests.put("Hết slot thì không nhận đơn, hủy đơn thì trống slot", CoreTests::fullTournamentRejects);
         tests.put("Ngoại lệ tỉ số: âm, trống, hòa/sửa ở loại trực tiếp", CoreTests::invalidScores);
-        tests.put("Ngoại lệ đăng ký: thiếu người, sai game, đóng cổng", CoreTests::registrationErrors);
+        tests.put("Ngoại lệ đăng ký: thiếu người, sai game, đóng cổng khi thiếu đội", CoreTests::registrationErrors);
         tests.put("Chuyển trạng thái giải không hợp lệ bị chặn", CoreTests::invalidTransitions);
         tests.put("Giải tự kết thúc khi trận cuối có kết quả", CoreTests::tournamentFinishes);
         tests.put("Sửa cấu hình và xóa giải chỉ khi còn Nháp", CoreTests::editAndDeleteOnlyInDraft);
@@ -142,10 +142,13 @@ public final class CoreTests {
         return t;
     }
 
-    private static void passwordIsHashed() {
+    private static void passwordIsHashed() throws Exception {
         User u = new TeamManager("TMX", "X", "x@test.vn", "Secret123");
         check(u.verifyPassword("Secret123"), "mật khẩu đúng phải được chấp nhận");
         check(!u.verifyPassword("secret123"), "mật khẩu sai phải bị từ chối");
+        new TeamManager("TMY", "Y", "y", "123456");   // 6 ký tự và email bất kỳ không trống là hợp lệ
+        expect(IllegalArgumentException.class, () -> new TeamManager("TMZ", "Z", "z", "12345"));
+        expect(IllegalArgumentException.class, () -> new TeamManager("TMW", "W", " ", "123456"));
     }
 
     private static void roundRobinPairs(int teams, int expectedMatches, int expectedRounds) throws Exception {
@@ -183,9 +186,13 @@ public final class CoreTests {
         for (int i = 0; i < 6; i++) {
             admin.approveRegistration(managerWithTeam(2, "Valorant").registerTournament(six));
         }
+        expect(TournamentException.class, () -> admin.closeRegistration(six));
+        check(six.getStatus() == TournamentStatus.REGISTRATION_OPEN, "6 đội thì giải phải vẫn mở đăng ký");
+        for (int i = 0; i < 2; i++) {
+            admin.approveRegistration(managerWithTeam(2, "Valorant").registerTournament(six));
+        }
         admin.closeRegistration(six);
-        expect(IllegalArgumentException.class, () -> admin.generateSchedule(six));
-        check(six.getMatches().isEmpty(), "sinh lịch lỗi thì giải không được có trận nào");
+        check(admin.generateSchedule(six).size() == 7, "duyệt thêm cho đủ 8 đội thì sinh được lịch");
     }
 
     private static void rankingPoints() throws Exception {
@@ -252,11 +259,21 @@ public final class CoreTests {
     private static void registrationErrors() throws Exception {
         Admin admin = admin();
         Tournament t = openTournament(admin, TournamentFormat.ROUND_ROBIN, 4);
+        Tournament draft = admin.createTournament("Nháp", "Valorant", TournamentFormat.ROUND_ROBIN, 4, 2,
+                NOW.minusDays(1), NOW.plusDays(1), "");
+        Team enough = managerWithTeam(2, "Valorant").getManagedTeam();
+        check(t.canRegister(enough), "đội đủ người phải đăng ký được giải đang mở");
+        check(draft.registrationProblem(enough).orElse("").contains("Nháp"),
+                "giải Nháp phải báo lý do chưa mở đăng ký, không phải đội chưa đủ điều kiện");
         expect(TeamNotEligibleException.class, () -> managerWithTeam(1, "Valorant").registerTournament(t));
         expect(TeamNotEligibleException.class, () -> managerWithTeam(2, "LoL").registerTournament(t));
         TeamManager ok = managerWithTeam(2, "Valorant");
         ok.registerTournament(t);
         expect(TeamNotEligibleException.class, () -> ok.registerTournament(t));
+        expect(TournamentException.class, () -> admin.closeRegistration(t));   // chưa có đội nào được duyệt
+        for (int i = 0; i < 2; i++) {
+            admin.approveRegistration(managerWithTeam(2, "Valorant").registerTournament(t));
+        }
         admin.closeRegistration(t);
         expect(RegistrationClosedException.class, () -> managerWithTeam(2, "Valorant").registerTournament(t));
         check(t.getRegistrations().get(0).getStatus() == RegistrationStatus.REJECTED,

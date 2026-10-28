@@ -1,5 +1,8 @@
 package gtms.model;
 
+import java.util.Arrays;
+import java.util.stream.Collectors;
+
 public enum TournamentStatus {
     DRAFT("Nháp"),
     REGISTRATION_OPEN("Đang mở đăng ký"),
@@ -22,5 +25,13 @@ public enum TournamentStatus {
             case ONGOING:             return next == FINISHED;
             default:                  return false; // FINISHED, CANCELLED không chuyển tiếp được
         }
+    }
+
+    /** Các trạng thái được chuyển tới từ trạng thái này, để ghi vào thông báo lỗi. */
+    public String nextOptions() {
+        String labels = Arrays.stream(values()).filter(s -> s != this && canTransitionTo(s))
+                .map(s -> "\"" + s.getLabel() + "\"").collect(Collectors.joining(", "));
+        return labels.isEmpty() ? "Đây là trạng thái cuối, không chuyển tiếp được nữa."
+                : "Từ trạng thái này chỉ chuyển được sang: " + labels + ".";
     }
 }

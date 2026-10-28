@@ -42,8 +42,8 @@ public class Match implements Identifiable, Serializable {
             throw new IllegalArgumentException("Hai vị trí của trận phải là hai đội khác nhau");
         }
         this.tournament = tournament;
-        this.matchId = Validator.requireText(matchId, "matchId");
-        this.round = Validator.requireMin(round, 1, "round");
+        this.matchId = Validator.requireText(matchId, "mã trận");
+        this.round = Validator.requireMin(round, 1, "Vòng đấu");
         this.scheduledTime = scheduledTime;
         this.teamA = teamA;
         this.teamB = teamB;
@@ -140,8 +140,8 @@ public class Match implements Identifiable, Serializable {
 
     private void transitionTo(MatchStatus next) throws InvalidStatusTransitionException {
         if (!status.canTransitionTo(next)) {
-            throw new InvalidStatusTransitionException("Trận " + matchId + " không thể chuyển từ "
-                    + status.getLabel() + " sang " + next.getLabel());
+            throw new InvalidStatusTransitionException("Trận " + matchId + " đang ở trạng thái \"" + status.getLabel()
+                    + "\", không chuyển sang \"" + next.getLabel() + "\" được. " + status.nextOptions());
         }
         status = next;
     }

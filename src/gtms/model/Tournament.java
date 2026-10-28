@@ -11,6 +11,7 @@ import gtms.util.Validator;
 
 import java.io.Serializable;
 import java.time.LocalDateTime;
+import java.time.format.DateTimeFormatter;
 import java.util.ArrayList;
 import java.util.Collections;
 import java.util.Comparator;
@@ -23,6 +24,7 @@ import java.util.stream.Collectors;
 /** Cách sinh lịch nằm ở ScheduleStrategy, nên thêm thể thức mới không phải sửa lớp này. */
 public class Tournament implements Identifiable, Serializable {
     private static final long serialVersionUID = 1L;
+    private static final DateTimeFormatter DATE_TIME = DateTimeFormatter.ofPattern("dd/MM/yyyy HH:mm");
 
     private final String tournamentId;
     private String name;
@@ -42,9 +44,9 @@ public class Tournament implements Identifiable, Serializable {
     public Tournament(String tournamentId, String name, String game, TournamentFormat format,
                       int maxTeams, int teamSize, LocalDateTime registrationStart,
                       LocalDateTime registrationEnd, String prize) {
-        this.tournamentId = Validator.requireText(tournamentId, "tournamentId");
-        this.name = Validator.requireText(name, "name");
-        this.game = Validator.requireText(game, "game");
+        this.tournamentId = Validator.requireText(tournamentId, "mã giải");
+        this.name = Validator.requireText(name, "tên giải");
+        this.game = Validator.requireText(game, "tựa game");
         this.prize = prize == null ? "" : prize.trim();
         applySettings(format, maxTeams, teamSize, registrationStart, registrationEnd);
         this.ranking = new Ranking(this, new DefaultRankingCalculator());
@@ -53,7 +55,7 @@ public class Tournament implements Identifiable, Serializable {
     private void applySettings(TournamentFormat format, int maxTeams, int teamSize,
                                LocalDateTime start, LocalDateTime end) {
         if (format == null) {
-            throw new IllegalArgumentException("Thiếu thông tin bắt buộc: format");
+            throw new IllegalArgumentException("Thiếu thông tin bắt buộc: thể thức");
         }
         if (start == null || end == null) {
             throw new IllegalArgumentException("Thiếu thời gian mở/đóng đăng ký");
@@ -62,8 +64,8 @@ public class Tournament implements Identifiable, Serializable {
             throw new IllegalArgumentException("Thời điểm đóng đăng ký phải sau thời điểm mở đăng ký");
         }
         // kiểm tra hết rồi mới gán, để khi báo lỗi giải vẫn giữ nguyên cấu hình cũ
-        Validator.requireMin(maxTeams, 2, "maxTeams");
-        Validator.requireMin(teamSize, 1, "teamSize");
+        Validator.requireMin(maxTeams, 2, "Số đội tối đa");
+        Validator.requireMin(teamSize, 1, "Số tuyển thủ mỗi đội");
         if (format == TournamentFormat.SINGLE_ELIMINATION && (maxTeams & (maxTeams - 1)) != 0) {
             throw new IllegalArgumentException("Loại trực tiếp cần số đội tối đa là 2, 4, 8, 16...");
         }
@@ -85,7 +87,7 @@ public class Tournament implements Identifiable, Serializable {
     }
 
     public void updateInfo(String name, String prize) {
-        this.name = Validator.requireText(name, "name");
+        this.name = Validator.requireText(name, "tên giải");
         this.prize = prize == null ? "" : prize.trim();
     }
 
@@ -97,7 +99,21 @@ public class Tournament implements Identifiable, Serializable {
 
     /** Chỉ để hỏi trước, không ném ngoại lệ; addRegistration() mới là nơi báo lỗi. */
     public boolean canRegister(Team team) {
-        return isRegistrationWindowOpen() && team.isEligible(this) && findActiveRegistration(team).isEmpty();
+        return registrationProblem(team).isEmpty();
+    }
+
+    /** Lý do đội chưa đăng ký được giải này (để hiện cho người dùng), rỗng nếu đăng ký được. */
+    public Optional<String> registrationProblem(Team team) {
+        Optional<String> closed = closedReason();
+        if (closed.isPresent()) {
+            return closed;
+        }
+        try {
+            checkEligibility(team);
+        } catch (TeamNotEligibleException e) {
+            return Optional.of(e.getMessage());
+        }
+        return fullReason();
     }
 
     /** Mỗi đơn còn hiệu lực chiếm một slot; hết slot thì không nhận thêm đơn. */
@@ -106,15 +122,40 @@ public class Tournament implements Identifiable, Serializable {
         if (registration.getTournament() != this) {
             throw new IllegalArgumentException("Đơn đăng ký không thuộc giải " + name);
         }
-        if (!isRegistrationWindowOpen()) {
-            throw new RegistrationClosedException("Giải " + name + " không mở đăng ký ("
-                    + status.getLabel() + ", hạn " + registrationStart + " - " + registrationEnd + ")");
+        Optional<String> closed = closedReason();
+        if (closed.isPresent()) {
+            throw new RegistrationClosedException(closed.get());
         }
         checkEligibility(registration.getTeam());
-        if (countOccupiedSlots() >= maxTeams) {
-            throw new RegistrationClosedException("Giải " + name + " đã đủ " + maxTeams + " đội");
+        Optional<String> full = fullReason();
+        if (full.isPresent()) {
+            throw new RegistrationClosedException(full.get());
         }
         registrations.add(registration);
+    }
+
+    /** Lý do giải không nhận đơn lúc này: sai trạng thái, chưa tới hoặc đã quá thời gian đăng ký. */
+    private Optional<String> closedReason() {
+        if (status != TournamentStatus.REGISTRATION_OPEN) {
+            return Optional.of("Giải " + name + " đang ở trạng thái \"" + status.getLabel()
+                    + "\" nên không nhận đăng ký");
+        }
+        LocalDateTime now = AppClock.now();
+        if (now.isBefore(registrationStart)) {
+            return Optional.of("Giải " + name + " chưa đến thời gian đăng ký (mở lúc "
+                    + registrationStart.format(DATE_TIME) + ")");
+        }
+        if (now.isAfter(registrationEnd)) {
+            return Optional.of("Giải " + name + " đã hết hạn đăng ký (hạn chót "
+                    + registrationEnd.format(DATE_TIME) + ")");
+        }
+        return Optional.empty();
+    }
+
+    private Optional<String> fullReason() {
+        return countOccupiedSlots() >= maxTeams
+                ? Optional.of("Giải " + name + " đã đủ " + maxTeams + " đội")
+                : Optional.empty();
     }
 
     private void checkEligibility(Team team) throws TeamNotEligibleException {
@@ -156,8 +197,8 @@ public class Tournament implements Identifiable, Serializable {
 
     public void changeStatus(TournamentStatus next) throws InvalidStatusTransitionException {
         if (!status.canTransitionTo(next)) {
-            throw new InvalidStatusTransitionException("Giải " + name + " không thể chuyển từ "
-                    + status.getLabel() + " sang " + next.getLabel());
+            throw new InvalidStatusTransitionException("Giải " + name + " đang ở trạng thái \"" + status.getLabel()
+                    + "\", không chuyển sang \"" + next.getLabel() + "\" được. " + status.nextOptions());
         }
         if (next == TournamentStatus.ONGOING && matches.isEmpty()) {
             throw new InvalidStatusTransitionException("Phải sinh lịch thi đấu trước khi bắt đầu giải");
@@ -180,8 +221,23 @@ public class Tournament implements Identifiable, Serializable {
         changeStatus(TournamentStatus.REGISTRATION_OPEN);
     }
 
-    /** Khóa các đơn đã duyệt, từ chối các đơn chưa được duyệt. */
+    /**
+     * Khóa các đơn đã duyệt, từ chối các đơn chưa được duyệt.
+     * Số đội đã duyệt phải sinh được lịch, nếu không giải sẽ kẹt vì không mở lại đăng ký được.
+     */
     public void closeRegistration() throws TournamentException {
+        if (status == TournamentStatus.REGISTRATION_OPEN) {
+            long approved = registrations.stream()
+                    .filter(r -> r.getStatus() == RegistrationStatus.APPROVED).count();
+            if (approved < 2) {
+                throw new TournamentException("Cần ít nhất 2 đội đã duyệt mới đóng đăng ký được (hiện có "
+                        + approved + "). Hãy duyệt thêm đơn hoặc hủy giải");
+            }
+            if (format == TournamentFormat.SINGLE_ELIMINATION && (approved & (approved - 1)) != 0) {
+                throw new TournamentException("Loại trực tiếp cần số đội đã duyệt là 2, 4, 8, 16... (hiện có "
+                        + approved + "). Hãy duyệt thêm hoặc từ chối bớt đơn");
+            }
+        }
         changeStatus(TournamentStatus.REGISTRATION_CLOSED);
         for (Registration r : new ArrayList<>(registrations)) {
             if (r.getStatus() == RegistrationStatus.APPROVED) {

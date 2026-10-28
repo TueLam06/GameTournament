@@ -23,7 +23,7 @@ public class Registration implements Identifiable, Serializable {
         if (team == null || tournament == null) {
             throw new IllegalArgumentException("Đơn đăng ký phải có đội và giải");
         }
-        this.registrationId = Validator.requireText(registrationId, "registrationId");
+        this.registrationId = Validator.requireText(registrationId, "mã đơn");
         this.team = team;
         this.tournament = tournament;
         this.registrationDate = AppClock.now();
@@ -59,8 +59,8 @@ public class Registration implements Identifiable, Serializable {
 
     private void transitionTo(RegistrationStatus next) throws InvalidStatusTransitionException {
         if (!status.canTransitionTo(next)) {
-            throw new InvalidStatusTransitionException("Đơn " + registrationId + " không thể chuyển từ "
-                    + status.getLabel() + " sang " + next.getLabel());
+            throw new InvalidStatusTransitionException("Đơn " + registrationId + " đang ở trạng thái \"" + status.getLabel()
+                    + "\", không chuyển sang \"" + next.getLabel() + "\" được. " + status.nextOptions());
         }
         status = next;
     }

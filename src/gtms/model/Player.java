@@ -16,16 +16,16 @@ public class Player implements Identifiable, Serializable {
     private String currentTeamId; // null khi chưa thuộc đội nào
 
     public Player(String playerId, String nickname, String fullName, String position, String gameId) {
-        this.playerId = Validator.requireText(playerId, "playerId");
+        this.playerId = Validator.requireText(playerId, "mã tuyển thủ");
         this.nickname = Validator.requireText(nickname, "nickname");
-        this.fullName = Validator.requireText(fullName, "fullName");
-        this.position = Validator.requireText(position, "position");
-        this.gameId = Validator.requireText(gameId, "gameId");
+        this.fullName = Validator.requireText(fullName, "họ tên");
+        this.position = Validator.requireText(position, "vị trí");
+        this.gameId = Validator.requireText(gameId, "Game ID");
     }
 
     public void updateInfo(String nickname, String position) {
         this.nickname = Validator.requireText(nickname, "nickname");
-        this.position = Validator.requireText(position, "position");
+        this.position = Validator.requireText(position, "vị trí");
     }
 
     // Phạm vi package: code ngoài gtms.model không gọi được; trong package chỉ Team dùng để gán/gỡ đội
