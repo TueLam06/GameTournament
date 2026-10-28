@@ -4,7 +4,6 @@ import gtms.exception.TournamentException;
 import gtms.model.Admin;
 import gtms.model.Match;
 import gtms.model.MatchStatus;
-import gtms.model.Player;
 import gtms.model.Registration;
 import gtms.model.Team;
 import gtms.model.TeamManager;
@@ -21,8 +20,6 @@ import java.nio.charset.StandardCharsets;
 import java.nio.file.Files;
 import java.nio.file.Path;
 import java.nio.file.Paths;
-import java.util.ArrayList;
-import java.util.List;
 import java.util.Scanner;
 
 /** Chương trình console. Chạy "demo" để xem kịch bản tự động, "test" để chạy kiểm thử. */
@@ -221,7 +218,6 @@ public class ConsoleApp {
         }
     }
 
-    /** Bỏ trống ô chọn tuyển thủ thì lấy teamSize người đầu danh sách đội. */
     private void registerTournament(TeamManager me) throws TournamentException {
         Team team = requireTeam(me);
         Tournament t = pickTournament();
@@ -230,19 +226,10 @@ public class ConsoleApp {
                 t.countOccupiedSlots(), t.getMaxTeams());
         System.out.println("Đội của bạn " + (t.canRegister(team) ? "đủ điều kiện đăng ký" : "chưa đủ điều kiện"));
         Printer.team(team);
-        String ids = in.text("Mã tuyển thủ thi đấu, cách nhau bởi dấu phẩy (Enter = " + t.getTeamSize()
-                + " người đầu danh sách): ");
-        Registration r;
-        if (ids.isBlank()) {
-            r = me.registerTournament(t);
-        } else {
-            List<Player> roster = new ArrayList<>();
-            for (String id : ids.split(",")) {
-                roster.add(team.findPlayer(id.trim().toUpperCase())
-                        .orElseThrow(() -> new IllegalArgumentException("Không có tuyển thủ " + id.trim() + " trong đội")));
-            }
-            r = me.registerTournament(t, roster);
+        if (!in.confirm("Đăng ký cả đội vào giải " + t.getName() + "?")) {
+            return;
         }
+        Registration r = me.registerTournament(t);
         System.out.println("Đã gửi đơn: " + r);
     }
 

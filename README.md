@@ -9,7 +9,7 @@ java -cp out gtms.app.ConsoleApp demo     # kịch bản demo tự động
 java -cp out gtms.app.ConsoleApp test     # bộ kiểm thử lõi (21 test)
 ```
 
-Giao diện Swing để chạy thử: bấm đúp `gui/build.bat` (xem [gui/README.md](gui/README.md)). Thư mục `gui/` tách riêng, khi nộp có thể xóa.
+Giao diện Swing dùng để demo khi báo cáo: bấm đúp `gui/build.bat` (xem [gui/README.md](gui/README.md)). Giao diện chỉ gọi các lớp trong `src/`, không chứa luật nghiệp vụ riêng.
 
 Tóm tắt cho thành viên nhóm: xem [TOM_TAT_CHO_NHOM.md](TOM_TAT_CHO_NHOM.md).
 

@@ -56,11 +56,11 @@ public final class CoreTests {
         tests.put("Mật khẩu được băm, xác thực đúng/sai", CoreTests::passwordIsHashed);
         tests.put("Round Robin 4 đội: 6 trận, 3 vòng, mỗi cặp gặp 1 lần", () -> roundRobinPairs(4, 6, 3));
         tests.put("Round Robin 5 đội (lẻ, có bye): 10 trận, 5 vòng", () -> roundRobinPairs(5, 10, 5));
-        tests.put("Single Elimination 6 đội: 2 bye, 5 trận, 3 vòng", CoreTests::singleEliminationByes);
+        tests.put("Single Elimination 8 đội: 7 trận, 3 vòng; 6 đội bị chặn", CoreTests::singleEliminationBracket);
         tests.put("BXH: thắng 3 / hòa 1 / thua 0, sắp xếp đúng", CoreTests::rankingPoints);
         tests.put("Sửa kết quả không cộng điểm hai lần", CoreTests::editResultRecalculates);
-        tests.put("Hết slot vào danh sách chờ, hủy đơn thì được đôn lên", CoreTests::waitingListPromotion);
-        tests.put("Ngoại lệ tỉ số: âm, trống, hòa ở loại trực tiếp", CoreTests::invalidScores);
+        tests.put("Hết slot thì không nhận đơn, hủy đơn thì trống slot", CoreTests::fullTournamentRejects);
+        tests.put("Ngoại lệ tỉ số: âm, trống, hòa/sửa ở loại trực tiếp", CoreTests::invalidScores);
         tests.put("Ngoại lệ đăng ký: thiếu người, sai game, đóng cổng", CoreTests::registrationErrors);
         tests.put("Chuyển trạng thái giải không hợp lệ bị chặn", CoreTests::invalidTransitions);
         tests.put("Giải tự kết thúc khi trận cuối có kết quả", CoreTests::tournamentFinishes);
@@ -69,7 +69,7 @@ public final class CoreTests {
         tests.put("Repository generic: tìm theo mã, lọc theo kiểu con", CoreTests::genericRepository);
         tests.put("Lưu và nạp lại file dữ liệu giữ nguyên tham chiếu", CoreTests::saveAndLoad);
         tests.put("NFR-01: sinh lịch 32 đội + BXH dưới 2 giây", CoreTests::performance32Teams);
-        tests.put("Không xóa được tuyển thủ có tên trong đơn còn hiệu lực", CoreTests::rosterPlayerCannotLeave);
+        tests.put("Không xóa được tuyển thủ khi đội còn đơn hiệu lực", CoreTests::playerCannotLeaveWhileRegistered);
         tests.put("Hủy giải thì đơn hủy theo, đội giải thể được", CoreTests::cancelledTournamentReleasesTeams);
         tests.put("Sửa cấu hình bị lỗi thì giữ nguyên cấu hình cũ", CoreTests::failedSettingsChangeKeepsOldValues);
         tests.put("File dữ liệu hỏng được giữ lại, không bị ghi đè", CoreTests::brokenFileIsBackedUp);
@@ -165,18 +165,27 @@ public final class CoreTests {
         }
     }
 
-    private static void singleEliminationByes() throws Exception {
-        Tournament t = ongoing(TournamentFormat.SINGLE_ELIMINATION, 6);
+    private static void singleEliminationBracket() throws Exception {
+        Tournament t = ongoing(TournamentFormat.SINGLE_ELIMINATION, 8);
         Map<Integer, List<Match>> rounds = t.getMatchesByRound();
-        check(t.getMatches().size() == 5, "6 đội loại trực tiếp phải có 5 trận, có " + t.getMatches().size());
-        check(rounds.get(1).size() == 2 && rounds.get(2).size() == 2 && rounds.get(3).size() == 1, "sai số trận mỗi vòng");
-        long waitingSlots = rounds.get(2).stream().filter(m -> m.getTeamA() == null || m.getTeamB() == null).count();
-        check(waitingSlots == 2, "mỗi trận vòng 2 phải có sẵn 1 đội được bye");
+        check(t.getMatches().size() == 7, "8 đội loại trực tiếp phải có 7 trận, có " + t.getMatches().size());
+        check(rounds.get(1).size() == 4 && rounds.get(2).size() == 2 && rounds.get(3).size() == 1, "sai số trận mỗi vòng");
+        check(rounds.get(2).stream().allMatch(m -> m.getTeamA() == null && m.getTeamB() == null),
+                "vòng 2 chưa có đội trước khi vòng 1 có kết quả");
         rounds.get(1).forEach(m -> check(m.getNextMatch() != null, "trận vòng 1 phải trỏ tới vòng 2"));
         Match first = rounds.get(1).get(0);
         first.setResult(2, 0);
-        check(first.getNextMatch().getTeamA() != null && first.getNextMatch().getTeamB() != null,
-                "đội thắng phải được đưa vào trận vòng sau");
+        check(first.getNextMatch().getTeamA() == first.getTeamA(), "đội thắng phải được đưa vào trận vòng sau");
+
+        expect(IllegalArgumentException.class, () -> openTournament(admin(), TournamentFormat.SINGLE_ELIMINATION, 6));
+        Admin admin = admin();
+        Tournament six = openTournament(admin, TournamentFormat.SINGLE_ELIMINATION, 8);
+        for (int i = 0; i < 6; i++) {
+            admin.approveRegistration(managerWithTeam(2, "Valorant").registerTournament(six));
+        }
+        admin.closeRegistration(six);
+        expect(IllegalArgumentException.class, () -> admin.generateSchedule(six));
+        check(six.getMatches().isEmpty(), "sinh lịch lỗi thì giải không được có trận nào");
     }
 
     private static void rankingPoints() throws Exception {
@@ -206,22 +215,23 @@ public final class CoreTests {
         check(winner.getScoreDifference() == 2, "hiệu số phải là +2");
     }
 
-    private static void waitingListPromotion() throws Exception {
+    private static void fullTournamentRejects() throws Exception {
         Admin admin = admin();
         Tournament t = openTournament(admin, TournamentFormat.ROUND_ROBIN, 2);
         List<TeamManager> ms = new ArrayList<>();
         List<Registration> rs = new ArrayList<>();
-        for (int i = 0; i < 4; i++) {
+        for (int i = 0; i < 2; i++) {
             ms.add(managerWithTeam(2, "Valorant"));
             rs.add(ms.get(i).registerTournament(t));
         }
-        check(rs.get(2).getWaitingPosition() == 1 && rs.get(3).getWaitingPosition() == 2, "sai vị trí chờ");
+        TeamManager late = managerWithTeam(2, "Valorant");
+        expect(RegistrationClosedException.class, () -> late.registerTournament(t));
+        check(t.getRegistrations().size() == 2, "đơn bị từ chối vì hết slot không được lưu lại");
         ms.get(0).cancelRegistration(rs.get(0));
-        check(rs.get(2).getWaitingPosition() == null, "đơn chờ số 1 phải được nhận slot");
-        check(rs.get(3).getWaitingPosition() == 1, "đơn chờ số 2 phải lên vị trí 1");
-        expect(InvalidStatusTransitionException.class, () -> admin.approveRegistration(rs.get(3)));
-        admin.approveRegistration(rs.get(2));
-        check(rs.get(2).getStatus() == RegistrationStatus.APPROVED, "đơn phải được duyệt");
+        Registration r = late.registerTournament(t);
+        admin.approveRegistration(r);
+        check(r.getStatus() == RegistrationStatus.APPROVED && t.countOccupiedSlots() == 2,
+                "hủy đơn phải trả lại slot cho đội khác");
     }
 
     private static void invalidScores() throws Exception {
@@ -230,8 +240,13 @@ public final class CoreTests {
         expect(InvalidScoreException.class, () -> m.setResult(-1, 0));
         expect(InvalidScoreException.class, () -> m.setResult(null, 0));
         check(!m.getStatus().isPlayed(), "trận phải giữ nguyên trạng thái khi tỉ số sai");
-        Tournament se = ongoing(TournamentFormat.SINGLE_ELIMINATION, 2);
-        expect(InvalidScoreException.class, () -> se.getMatches().get(0).setResult(1, 1));
+        Tournament se = ongoing(TournamentFormat.SINGLE_ELIMINATION, 4);
+        Match first = se.getMatches().get(0);
+        expect(InvalidScoreException.class, () -> first.setResult(1, 1));
+        first.setResult(2, 1);
+        expect(InvalidStatusTransitionException.class, () -> first.setResult(0, 2));
+        check(first.getScoreA() == 2 && first.getNextMatch().getTeamA() == first.getTeamA(),
+                "kết quả loại trực tiếp đã ghi phải giữ nguyên");
     }
 
     private static void registrationErrors() throws Exception {
@@ -306,7 +321,7 @@ public final class CoreTests {
         check(s.getTitles() == 1, "đội thắng cả 2 trận phải vô địch: " + s);
     }
 
-    private static void rosterPlayerCannotLeave() throws Exception {
+    private static void playerCannotLeaveWhileRegistered() throws Exception {
         TournamentService service = new TournamentService(new DataStore());
         Admin admin = service.addAdmin("Admin", "roster-admin@test.vn", "Passw0rd");
         TeamManager manager = service.registerAccount("Manager", "roster-tm@test.vn", "Passw0rd");
@@ -318,10 +333,12 @@ public final class CoreTests {
         Tournament t = service.createTournament(admin, "Roster Cup", "Valorant", TournamentFormat.ROUND_ROBIN, 4, 2,
                 NOW.minusDays(1), NOW.plusDays(1), "");
         admin.openRegistration(t);
-        admin.approveRegistration(manager.registerTournament(t, players.subList(0, 2)));
-        expect(TournamentException.class, () -> service.removePlayer(manager, players.get(0).getPlayerId()));
+        Registration r = manager.registerTournament(t);
+        admin.approveRegistration(r);
+        expect(TournamentException.class, () -> service.removePlayer(manager, players.get(2).getPlayerId()));
+        manager.cancelRegistration(r);
         service.removePlayer(manager, players.get(2).getPlayerId());
-        check(manager.getManagedTeam().getPlayers().size() == 2, "tuyển thủ dự bị phải xóa được, người trong đơn thì không");
+        check(manager.getManagedTeam().getPlayers().size() == 2, "hủy đơn rồi thì phải xóa được tuyển thủ");
     }
 
     private static void cancelledTournamentReleasesTeams() throws Exception {

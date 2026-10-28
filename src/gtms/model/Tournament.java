@@ -14,7 +14,6 @@ import java.time.LocalDateTime;
 import java.util.ArrayList;
 import java.util.Collections;
 import java.util.Comparator;
-import java.util.HashSet;
 import java.util.List;
 import java.util.Map;
 import java.util.Optional;
@@ -65,6 +64,9 @@ public class Tournament implements Identifiable, Serializable {
         // kiểm tra hết rồi mới gán, để khi báo lỗi giải vẫn giữ nguyên cấu hình cũ
         Validator.requireMin(maxTeams, 2, "maxTeams");
         Validator.requireMin(teamSize, 1, "teamSize");
+        if (format == TournamentFormat.SINGLE_ELIMINATION && (maxTeams & (maxTeams - 1)) != 0) {
+            throw new IllegalArgumentException("Loại trực tiếp cần số đội tối đa là 2, 4, 8, 16...");
+        }
         this.format = format;
         this.scheduleStrategy = format.getStrategy();
         this.maxTeams = maxTeams;
@@ -98,7 +100,7 @@ public class Tournament implements Identifiable, Serializable {
         return isRegistrationWindowOpen() && team.isEligible(this) && findActiveRegistration(team).isEmpty();
     }
 
-    /** Hết slot thì đơn vẫn được nhận nhưng vào danh sách chờ. */
+    /** Mỗi đơn còn hiệu lực chiếm một slot; hết slot thì không nhận thêm đơn. */
     public void addRegistration(Registration registration)
             throws RegistrationClosedException, TeamNotEligibleException {
         if (registration.getTournament() != this) {
@@ -108,14 +110,14 @@ public class Tournament implements Identifiable, Serializable {
             throw new RegistrationClosedException("Giải " + name + " không mở đăng ký ("
                     + status.getLabel() + ", hạn " + registrationStart + " - " + registrationEnd + ")");
         }
-        checkEligibility(registration.getTeam(), registration.getRegisteredPlayers());
+        checkEligibility(registration.getTeam());
         if (countOccupiedSlots() >= maxTeams) {
-            registration.setWaitingPosition(getWaitingList().size() + 1);
+            throw new RegistrationClosedException("Giải " + name + " đã đủ " + maxTeams + " đội");
         }
         registrations.add(registration);
     }
 
-    private void checkEligibility(Team team, List<Player> roster) throws TeamNotEligibleException {
+    private void checkEligibility(Team team) throws TeamNotEligibleException {
         if (team.getStatus() != TeamStatus.ACTIVE) {
             throw new TeamNotEligibleException("Đội " + team.getTeamName() + " đã giải thể");
         }
@@ -130,38 +132,10 @@ public class Tournament implements Identifiable, Serializable {
             throw new TeamNotEligibleException("Đội " + team.getTeamName() + " còn thiếu "
                     + (teamSize - team.getPlayers().size()) + " tuyển thủ (yêu cầu " + teamSize + ")");
         }
-        if (roster.size() != teamSize || new HashSet<>(roster).size() != roster.size()) {
-            throw new TeamNotEligibleException("Danh sách thi đấu phải gồm đúng " + teamSize
-                    + " tuyển thủ khác nhau (nhận " + roster.size() + ")");
-        }
-        for (Player p : roster) {
-            if (!team.getPlayers().contains(p)) {
-                throw new TeamNotEligibleException(p.getNickname() + " không thuộc đội " + team.getTeamName());
-            }
-        }
-    }
-
-    /** Gọi khi một đơn bị từ chối hoặc hủy: trả slot cho đơn chờ đầu tiên rồi đánh số lại hàng chờ. */
-    void onRegistrationReleased(boolean heldSlot) {
-        List<Registration> waiting = getWaitingList();
-        if (heldSlot && status == TournamentStatus.REGISTRATION_OPEN && !waiting.isEmpty()) {
-            waiting.get(0).setWaitingPosition(null);
-            waiting = waiting.subList(1, waiting.size());
-        }
-        for (int i = 0; i < waiting.size(); i++) {
-            waiting.get(i).setWaitingPosition(i + 1);
-        }
     }
 
     public int countOccupiedSlots() {
-        return (int) registrations.stream().filter(Registration::holdsSlot).count();
-    }
-
-    public List<Registration> getWaitingList() {
-        return registrations.stream()
-                .filter(r -> r.getStatus() == RegistrationStatus.PENDING && r.getWaitingPosition() != null)
-                .sorted(Comparator.comparing(Registration::getWaitingPosition))
-                .collect(Collectors.toList());
+        return (int) registrations.stream().filter(Registration::isActive).count();
     }
 
     public Optional<Registration> findActiveRegistration(Team team) {

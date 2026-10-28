@@ -11,7 +11,8 @@ import java.util.Optional;
 
 /**
  * Không lưu đội thắng mà tính từ tỉ số, để hai dữ liệu không bao giờ lệch nhau.
- * nextMatch chỉ dùng ở thể thức loại trực tiếp: đội thắng được đưa vào trận đó.
+ * nextMatch chỉ dùng ở thể thức loại trực tiếp: đội thắng được đưa vào trận đó,
+ * vì vậy ở thể thức này kết quả đã ghi thì không sửa được nữa.
  */
 public class Match implements Identifiable, Serializable {
     private static final long serialVersionUID = 1L;
@@ -53,7 +54,7 @@ public class Match implements Identifiable, Serializable {
         transitionTo(MatchStatus.IN_PROGRESS);
     }
 
-    /** Ghi hoặc sửa tỉ số. Kiểm tra hết rồi mới ghi, nên tỉ số sai thì trận giữ nguyên. */
+    /** Ghi tỉ số (vòng tròn thì sửa lại được). Kiểm tra hết rồi mới ghi, nên tỉ số sai thì trận giữ nguyên. */
     public void setResult(Integer scoreA, Integer scoreB)
             throws InvalidScoreException, InvalidStatusTransitionException {
         ensureReadyToPlay();
@@ -66,15 +67,14 @@ public class Match implements Identifiable, Serializable {
         if (!tournament.getFormat().isDrawAllowed() && scoreA.equals(scoreB)) {
             throw new InvalidScoreException("Thể thức " + tournament.getFormat().getLabel() + " không cho phép hòa");
         }
-        if (status == MatchStatus.FINISHED && nextMatch != null && nextMatch.getStatus().isPlayed()) {
-            throw new InvalidStatusTransitionException("Trận " + nextMatch.getMatchId()
-                    + " ở vòng sau đã có kết quả, không thể sửa trận " + matchId);
+        if (status.isPlayed() && tournament.getFormat() == TournamentFormat.SINGLE_ELIMINATION) {
+            throw new InvalidStatusTransitionException("Trận " + matchId
+                    + " đã có kết quả, thể thức loại trực tiếp không cho sửa");
         }
-        Team previousWinner = getWinner().orElse(null);
         transitionTo(MatchStatus.FINISHED);
         this.scoreA = scoreA;
         this.scoreB = scoreB;
-        moveWinnerForward(previousWinner);
+        moveWinnerForward();
         tournament.onMatchUpdated();
     }
 
@@ -86,7 +86,7 @@ public class Match implements Identifiable, Serializable {
         transitionTo(MatchStatus.WALKOVER);
         scoreA = loser == teamA ? WALKOVER_LOSE_SCORE : WALKOVER_WIN_SCORE;
         scoreB = loser == teamB ? WALKOVER_LOSE_SCORE : WALKOVER_WIN_SCORE;
-        moveWinnerForward(null);
+        moveWinnerForward();
         tournament.onMatchUpdated();
     }
 
@@ -103,30 +103,13 @@ public class Match implements Identifiable, Serializable {
         return Optional.of(scoreA > scoreB ? teamA : teamB);
     }
 
-    public void advanceWinner() {
-        moveWinnerForward(null);
-    }
-
-    private void moveWinnerForward(Team previousWinner) {
+    private void moveWinnerForward() {
         if (nextMatch != null) {
-            getWinner().ifPresent(winner -> nextMatch.receiveTeam(winner, previousWinner));
+            getWinner().ifPresent(nextMatch::assignTeam);
         }
     }
 
-    private void receiveTeam(Team team, Team replacing) {
-        if (team == teamA || team == teamB) {
-            return;
-        }
-        if (replacing != null && replacing == teamA) {
-            teamA = team;
-        } else if (replacing != null && replacing == teamB) {
-            teamB = team;
-        } else {
-            assignTeam(team);
-        }
-    }
-
-    /** Điền đội vào chỗ trống đầu tiên; dùng khi sinh nhánh và khi đội được miễn đấu. */
+    /** Điền đội vào chỗ trống đầu tiên; dùng khi đội thắng đi tiếp vào vòng sau. */
     public void assignTeam(Team team) {
         if (teamA == null) {
             teamA = team;

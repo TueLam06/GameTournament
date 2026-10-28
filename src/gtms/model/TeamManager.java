@@ -47,19 +47,14 @@ public class TeamManager extends User {
         return requireTeam().removePlayer(playerId);
     }
 
-    /** Danh sách thi đấu mặc định: teamSize tuyển thủ đầu tiên của đội. */
+    /**
+     * Đăng ký cả đội vào giải. Ném RegistrationClosedException nếu giải không mở hoặc đã đủ đội,
+     * TeamNotEligibleException nếu đội không đủ điều kiện.
+     */
     public Registration registerTournament(Tournament tournament) throws TournamentException {
-        List<Player> players = requireTeam().getPlayers();
-        int size = Math.min(tournament.getTeamSize(), players.size());
-        return registerTournament(tournament, players.subList(0, size));
-    }
-
-    /** Ném RegistrationClosedException nếu giải không mở, TeamNotEligibleException nếu đội không đủ điều kiện. */
-    public Registration registerTournament(Tournament tournament, List<Player> roster)
-            throws TournamentException {
         ensureActive();
         Team team = requireTeam();
-        Registration registration = new Registration(IdGenerator.next("REG"), team, tournament, roster);
+        Registration registration = new Registration(IdGenerator.next("REG"), team, tournament);
         tournament.addRegistration(registration);
         return registration;
     }

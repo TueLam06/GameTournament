@@ -65,22 +65,24 @@ public final class DemoScenario {
         Tournament cup = service.searchTournaments("valorant cup", null, null).get(0);
         Printer.title("3. Đăng ký giải " + cup.getName() + " (UC-06, UC-07, UC-08, UC-10)");
         List<Registration> regs = new ArrayList<>();
-        for (int i = 0; i < 5; i++) {
+        for (int i = 0; i < 4; i++) {
             regs.add(managers.get(i).registerTournament(cup));
         }
         Printer.registrations(cup.getRegistrations());
         expectError("Đội chỉ có 3 tuyển thủ đăng ký", () -> newbie.registerTournament(cup));
         expectError("Đăng ký trùng giải", () -> managers.get(0).registerTournament(cup));
-        expectError("Duyệt đơn đang ở danh sách chờ", () -> admin.approveRegistration(regs.get(4)));
+        expectError("Đăng ký khi giải đã đủ 4 đội", () -> managers.get(4).registerTournament(cup));
         admin.approveRegistration(regs.get(0));
         admin.approveRegistration(regs.get(2));
         admin.approveRegistration(regs.get(3));
         managers.get(1).cancelRegistration(regs.get(1));
-        System.out.println("Đội 2 hủy đơn -> đơn chờ của đội 5 được nhận slot: " + regs.get(4));
-        admin.approveRegistration(regs.get(4));
+        System.out.println("Đội 2 hủy đơn -> giải trống 1 slot: " + regs.get(1));
         Registration late = managers.get(5).registerTournament(cup);
-        admin.rejectRegistration(late, "Giải đã đủ 4 đội");
+        admin.rejectRegistration(late, "Đội chưa nộp hồ sơ tuyển thủ");
         expectError("Hủy đơn đã bị từ chối", () -> managers.get(5).cancelRegistration(late));
+        Registration fifth = managers.get(4).registerTournament(cup);
+        admin.approveRegistration(fifth);
+        System.out.println("Đơn bị từ chối trả lại slot, đội 5 đăng ký được: " + fifth);
         Printer.registrations(cup.getRegistrations());
 
         Printer.title("4. Đóng đăng ký và sinh lịch vòng tròn (UC-11)");
@@ -104,27 +106,27 @@ public final class DemoScenario {
         admin.updateMatchResult(rr.get(3), 13, 10);
         Printer.tournamentDetail(cup);
 
-        Printer.title("6. Giải loại trực tiếp 6 đội: bye, nextMatch, walkover");
+        Printer.title("6. Giải loại trực tiếp 4 đội: nextMatch, walkover");
         LocalDateTime now = AppClock.now();
+        expectError("Tạo giải loại trực tiếp tối đa 6 đội", () -> service.createTournament(admin, "Lỗi",
+                SampleData.GAME, TournamentFormat.SINGLE_ELIMINATION, 6, 5, now.minusDays(1), now.plusDays(2), ""));
         Tournament ko = service.createTournament(admin, "PTIT Knockout Mini", SampleData.GAME,
-                TournamentFormat.SINGLE_ELIMINATION, 8, 5, now.minusDays(1), now.plusDays(2), "Cúp lưu niệm");
+                TournamentFormat.SINGLE_ELIMINATION, 4, 5, now.minusDays(1), now.plusDays(2), "Cúp lưu niệm");
         admin.openRegistration(ko);
-        for (int i = 0; i < 6; i++) {
+        for (int i = 0; i < 4; i++) {
             admin.approveRegistration(managers.get(i).registerTournament(ko));
         }
         admin.closeRegistration(ko);
         admin.generateSchedule(ko);
         Printer.schedule(ko);
         List<Match> round1 = ko.getMatchesByRound().get(1);
+        Match finalMatch = ko.getMatchesByRound().get(2).get(0);
         expectError("Tỉ số hòa ở thể thức loại trực tiếp", () -> admin.updateMatchResult(round1.get(0), 1, 1));
-        expectError("Nhập kết quả trận chung kết khi chưa đủ đội",
-                () -> admin.updateMatchResult(ko.getMatchesByRound().get(3).get(0), 2, 0));
+        expectError("Nhập kết quả chung kết khi chưa đủ đội", () -> admin.updateMatchResult(finalMatch, 2, 0));
         admin.updateMatchResult(round1.get(0), 2, 1);
+        expectError("Sửa kết quả trận loại trực tiếp", () -> admin.updateMatchResult(round1.get(0), 0, 2));
         admin.recordWalkover(round1.get(1), round1.get(1).getTeamA());
-        for (Match m : ko.getMatchesByRound().get(2)) {
-            admin.updateMatchResult(m, 2, 0);
-        }
-        admin.updateMatchResult(ko.getMatchesByRound().get(3).get(0), 1, 2);
+        admin.updateMatchResult(finalMatch, 1, 2);
         Printer.tournamentDetail(ko);
 
         Printer.title("7. Lưu/nạp file, xuất CSV, tìm kiếm (NFR-07, FR-03, FR-15)");

@@ -25,7 +25,6 @@ import javax.swing.JComboBox;
 import javax.swing.JComponent;
 import javax.swing.JFrame;
 import javax.swing.JLabel;
-import javax.swing.JList;
 import javax.swing.JOptionPane;
 import javax.swing.JPanel;
 import javax.swing.JPasswordField;
@@ -56,14 +55,12 @@ import java.nio.file.Paths;
 import java.time.LocalDateTime;
 import java.time.format.DateTimeFormatter;
 import java.time.format.DateTimeParseException;
-import java.util.ArrayList;
 import java.util.List;
 import java.util.Optional;
-import java.util.stream.IntStream;
 
 /**
- * Giao diện Swing để chạy thử, dùng chung dữ liệu data/gtms.dat với bản console.
- * Cả thư mục gui/ có thể bỏ đi khi nộp mà không ảnh hưởng mã lõi.
+ * Giao diện Swing để demo khi báo cáo, dùng chung dữ liệu data/gtms.dat với bản console.
+ * Chỉ gọi các lớp model/service, không chứa luật nghiệp vụ riêng.
  */
 public class GuiApp extends JFrame {
     private static final Path DATA_FILE = Paths.get("data", "gtms.dat");
@@ -80,7 +77,7 @@ public class GuiApp extends JFrame {
     private User currentUser;
 
     private final DefaultTableModel tournamentModel = readOnlyModel("Mã", "Tên giải", "Thể thức", "Slot", "Trạng thái");
-    private final DefaultTableModel registrationModel = readOnlyModel("Mã đơn", "Đội", "Trạng thái", "Chờ số", "Lý do từ chối");
+    private final DefaultTableModel registrationModel = readOnlyModel("Mã đơn", "Đội", "Trạng thái", "Lý do từ chối");
     private final DefaultTableModel matchModel = readOnlyModel("Mã trận", "Vòng", "Giờ", "Đội A", "Tỉ số", "Đội B", "Trạng thái");
     private final DefaultTableModel rankingModel = readOnlyModel("#", "Đội", "Trận", "Thắng", "Hòa", "Thua", "Hiệu số", "Điểm");
     private final DefaultTableModel playerModel = readOnlyModel("Mã", "Nickname", "Họ tên", "Vị trí", "Game ID");
@@ -289,8 +286,7 @@ public class GuiApp extends JFrame {
                 + "</html>");
         for (Registration r : t.getRegistrations()) {
             registrationModel.addRow(new Object[]{r.getRegistrationId(), r.getTeam().getTeamName(),
-                    r.getStatus().getLabel(), r.getWaitingPosition() == null ? "" : r.getWaitingPosition(),
-                    r.getRejectionReason() == null ? "" : r.getRejectionReason()});
+                    r.getStatus().getLabel(), r.getRejectionReason() == null ? "" : r.getRejectionReason()});
         }
         for (Match m : t.getMatches()) {
             matchModel.addRow(new Object[]{m.getMatchId(), m.getRound(),
@@ -477,27 +473,12 @@ public class GuiApp extends JFrame {
             throw new TournamentException("Bạn chưa có đội, hãy tạo đội trước");
         }
         Team team = manager.getManagedTeam();
-        List<Player> players = team.getPlayers();
-        JList<String> list = new JList<>(players.stream()
-                .map(p -> p.getPlayerId() + "  " + p.getNickname() + " (" + p.getPosition() + ")")
-                .toArray(String[]::new));
-        list.setSelectionMode(ListSelectionModel.MULTIPLE_INTERVAL_SELECTION);
-        list.setSelectedIndices(IntStream.range(0, Math.min(t.getTeamSize(), players.size())).toArray());
-        JPanel panel = new JPanel(new BorderLayout(0, 6));
-        panel.add(new JLabel("<html>Giải yêu cầu " + t.getTeamSize() + " tuyển thủ, đã dùng "
-                + t.countOccupiedSlots() + "/" + t.getMaxTeams() + " slot. Đội "
-                + (t.canRegister(team) ? "đủ" : "<b>chưa đủ</b>") + " điều kiện.<br>"
-                + "Chọn danh sách thi đấu (giữ Ctrl để chọn nhiều):</html>"), BorderLayout.NORTH);
-        panel.add(new JScrollPane(list), BorderLayout.CENTER);
-        if (JOptionPane.showConfirmDialog(this, panel, "Đăng ký " + t.getName(), JOptionPane.OK_CANCEL_OPTION,
-                JOptionPane.PLAIN_MESSAGE) == JOptionPane.OK_OPTION) {
-            List<Player> roster = new ArrayList<>();
-            for (int index : list.getSelectedIndices()) {
-                roster.add(players.get(index));
-            }
-            Registration r = manager.registerTournament(t, roster);
-            info("Đã gửi đơn " + r.getRegistrationId() + (r.getWaitingPosition() == null ? ""
-                    : ", đang ở danh sách chờ số " + r.getWaitingPosition()));
+        if (confirm("<html>Giải yêu cầu " + t.getTeamSize() + " tuyển thủ, đã dùng "
+                + t.countOccupiedSlots() + "/" + t.getMaxTeams() + " slot. Đội " + team.getTeamName() + " có "
+                + team.getPlayers().size() + " tuyển thủ, " + (t.canRegister(team) ? "đủ" : "<b>chưa đủ</b>")
+                + " điều kiện.<br>Đăng ký cả đội vào giải " + t.getName() + "?</html>")) {
+            Registration r = manager.registerTournament(t);
+            info("Đã gửi đơn " + r.getRegistrationId());
         }
     }
 

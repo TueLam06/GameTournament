@@ -1,6 +1,6 @@
-# Giao diện chạy thử (Swing)
+# Giao diện Swing
 
-Chỉ dùng để chạy thử trong nhóm. Thư mục `gui/` không nằm trong mã lõi: khi nộp bài, xóa cả thư mục này là xong.
+Dùng để demo chương trình khi báo cáo và được nộp kèm mã nguồn. Giao diện chỉ gọi các lớp trong `src/` (model, service), không chứa luật nghiệp vụ riêng.
 
 ## Build và chạy
 
@@ -27,7 +27,7 @@ java -jar gui/build/GameTournamentGUI.jar
 - Bảng bên trái là danh sách giải; chọn một giải để xem đơn đăng ký, lịch thi đấu, bảng xếp hạng ở bên phải.
 - Bấm **Đăng nhập**, chọn email trong danh sách (mật khẩu mẫu đã điền sẵn `Ptit@2026`). Hàng nút **Thao tác** ở dưới đổi theo vai trò:
   - Admin: tạo, mở, đóng, hủy, xóa giải; duyệt, từ chối đơn (chọn đơn trong tab Đơn đăng ký); sinh lịch; nhập kết quả, xử thua (chọn trận trong tab Lịch thi đấu); xuất CSV; khóa tài khoản.
-  - Đội trưởng: tạo đội, thêm, xóa tuyển thủ; đăng ký giải đang chọn và chọn đội hình; hủy đăng ký; xem thành tích.
+  - Đội trưởng: tạo đội, thêm, xóa tuyển thủ; đăng ký cả đội vào giải đang chọn; hủy đăng ký; xem thành tích.
 - **Chạy test**, **Chạy demo**: chạy bộ 21 test hoặc kịch bản demo và hiện kết quả trong cửa sổ.
 - **Về dữ liệu mẫu**: xóa dữ liệu đang có, quay lại dữ liệu ban đầu.
 - Dữ liệu tự lưu vào `data/gtms.dat` khi đóng cửa sổ, dùng chung với bản console.
