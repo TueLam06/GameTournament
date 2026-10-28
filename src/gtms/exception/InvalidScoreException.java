@@ -7,4 +7,9 @@ public class InvalidScoreException extends TournamentException {
     public InvalidScoreException(String message) {
         super(message);
     }
+
+    @Override
+    public String getKind() {
+        return "Tỉ số không hợp lệ";
+    }
 }

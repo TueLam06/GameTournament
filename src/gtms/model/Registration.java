@@ -58,6 +58,10 @@ public class Registration implements Identifiable, Serializable {
     }
 
     private void transitionTo(RegistrationStatus next) throws InvalidStatusTransitionException {
+        if (status == next) {
+            throw new InvalidStatusTransitionException("Đơn " + registrationId + " đã ở trạng thái \""
+                    + status.getLabel() + "\" rồi");
+        }
         if (!status.canTransitionTo(next)) {
             throw new InvalidStatusTransitionException("Đơn " + registrationId + " đang ở trạng thái \"" + status.getLabel()
                     + "\", không chuyển sang \"" + next.getLabel() + "\" được. " + status.nextOptions());

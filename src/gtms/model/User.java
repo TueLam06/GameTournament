@@ -72,6 +72,6 @@ public abstract class User implements Identifiable, Serializable {
 
     @Override
     public String toString() {
-        return String.format("%-6s %-12s %-22s %-25s %s", userId, getRole(), name, email, accountStatus);
+        return String.format("%-6s %-12s %-22s %-25s %s", userId, getRole(), name, email, accountStatus.getLabel());
     }
 }

@@ -7,4 +7,9 @@ public class TournamentException extends Exception {
     public TournamentException(String message) {
         super(message);
     }
+
+    /** Tên loại lỗi hiển thị cho người dùng; lớp con ghi đè để phân loại rõ hơn. */
+    public String getKind() {
+        return "Lỗi nghiệp vụ";
+    }
 }

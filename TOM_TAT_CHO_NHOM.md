@@ -49,7 +49,7 @@ Các kiến thức của môn được dùng trong mã:
 - **Enum:** 6 enum trạng thái; 3 enum có hàm `canTransitionTo()` để chặn chuyển trạng thái sai.
 - **Collections:** `ArrayList`, `LinkedHashMap`, `TreeMap`, `HashSet`, `HashMap`, `Comparator`, `Optional`, Stream API.
 - **Generics:** `Repository<T extends Identifiable>` là kho dùng chung cho tài khoản, đội, tuyển thủ, giải đấu.
-- **Ngoại lệ:** `TournamentException` (checked) và 4 lớp con; mọi lỗi được bắt ở một chỗ là `ConsoleApp.execute()`.
+- **Ngoại lệ:** `TournamentException` (checked) và 4 lớp con, mỗi lớp có `getKind()` trả về tên loại lỗi tiếng Việt (ghi đè, đa hình); mọi lỗi được bắt ở một chỗ là `ConsoleApp.execute()` (GUI: `GuiApp.run()`).
 
 ## 3. Thư mục và package
 
@@ -90,7 +90,8 @@ Tài khoản mẫu, mật khẩu chung `Ptit@2026`:
 - Thắng 3, hòa 1, thua 0. Bằng điểm thì xét hiệu số, rồi số trận thắng. Đội bỏ cuộc thua 0-1.
 - Loại trực tiếp: số đội phải là 2, 4, 8, 16...; vòng 1 ghép theo thứ tự đăng ký (1-2, 3-4...). Kết quả đã ghi thì không sửa được (vòng tròn thì sửa được).
 - Đăng ký cả đội, không chọn riêng đội hình. Mỗi đơn còn hiệu lực chiếm một slot; hết slot thì không nhận đơn. Đơn bị hủy hoặc từ chối thì trả lại slot.
-- Đóng đăng ký chỉ được khi có ít nhất 2 đội đã duyệt (loại trực tiếp: đúng 2, 4, 8, 16... đội), để giải luôn sinh được lịch. Đã đóng thì không mở lại được.
+- Đóng đăng ký chỉ được khi có ít nhất 2 đội đã duyệt (loại trực tiếp: đúng 2, 4, 8, 16... đội), để giải luôn sinh được lịch. Thừa đội thì ban tổ chức từ chối bớt đơn (kể cả đơn đã duyệt, khi còn mở đăng ký). Đã đóng thì không mở lại được.
+- Mọi thông báo lỗi bằng tiếng Việt; nhập chữ vào ô số hoặc sai định dạng ngày giờ đều báo rõ ô nào sai.
 - Chỉ sửa cấu hình hoặc xóa giải khi giải còn Nháp.
 - Đội còn đơn đăng ký hiệu lực ở giải chưa kết thúc thì không xóa tuyển thủ được.
 - Hủy giải thì mọi đơn còn hiệu lực của giải đó cũng bị hủy.

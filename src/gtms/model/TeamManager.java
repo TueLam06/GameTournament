@@ -96,7 +96,7 @@ public class TeamManager extends User {
     public Team getManagedTeam() { return managedTeam; }
 
     @Override
-    public String getRole() { return "TeamManager"; }
+    public String getRole() { return "Đội trưởng"; }
 
     @Override
     public void showMenu() {

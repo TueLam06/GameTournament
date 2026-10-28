@@ -96,6 +96,6 @@ public class Team implements Identifiable, Serializable {
     @Override
     public String toString() {
         return String.format("%-6s %-18s %-8s %-18s %d tuyển thủ, %s",
-                teamId, teamName, region, game, players.size(), status);
+                teamId, teamName, region, game, players.size(), status.getLabel());
     }
 }

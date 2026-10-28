@@ -7,4 +7,9 @@ public class InvalidStatusTransitionException extends TournamentException {
     public InvalidStatusTransitionException(String message) {
         super(message);
     }
+
+    @Override
+    public String getKind() {
+        return "Sai trạng thái";
+    }
 }

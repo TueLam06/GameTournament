@@ -55,6 +55,7 @@ import java.nio.file.Paths;
 import java.time.LocalDateTime;
 import java.time.format.DateTimeFormatter;
 import java.time.format.DateTimeParseException;
+import java.util.Arrays;
 import java.util.List;
 import java.util.Optional;
 
@@ -355,7 +356,9 @@ public class GuiApp extends JFrame {
         LocalDateTime now = AppClock.now();
         JTextField name = new JTextField("Giải thử nghiệm");
         JTextField game = new JTextField(SampleData.GAME);
-        JComboBox<TournamentFormat> format = new JComboBox<>(TournamentFormat.values());
+        TournamentFormat[] formats = TournamentFormat.values();
+        JComboBox<String> format = new JComboBox<>(Arrays.stream(formats).map(TournamentFormat::getLabel)
+                .toArray(String[]::new));
         JTextField maxTeams = new JTextField("4");
         JTextField teamSize = new JTextField("5");
         JTextField start = new JTextField(now.format(TIME));
@@ -365,9 +368,9 @@ public class GuiApp extends JFrame {
                 "Số tuyển thủ mỗi đội", teamSize, "Mở đăng ký (dd/MM/yyyy HH:mm)", start,
                 "Đóng đăng ký (dd/MM/yyyy HH:mm)", end, "Giải thưởng", prize)) {
             Tournament t = service.createTournament(admin, name.getText(), game.getText(),
-                    (TournamentFormat) format.getSelectedItem(), Integer.parseInt(maxTeams.getText().trim()),
-                    Integer.parseInt(teamSize.getText().trim()), LocalDateTime.parse(start.getText().trim(), TIME),
-                    LocalDateTime.parse(end.getText().trim(), TIME), prize.getText());
+                    formats[format.getSelectedIndex()], parseInt(maxTeams.getText(), "Số đội tối đa"),
+                    parseInt(teamSize.getText(), "Số tuyển thủ mỗi đội"), parseTime(start.getText(), "Mở đăng ký"),
+                    parseTime(end.getText(), "Đóng đăng ký"), prize.getText());
             info("Đã tạo giải " + t.getTournamentId() + " ở trạng thái Nháp. Bấm \"Mở đăng ký\" để các đội đăng ký.");
         }
     }
@@ -394,6 +397,7 @@ public class GuiApp extends JFrame {
         if (m.getTeamA() == null || m.getTeamB() == null) {
             throw new IllegalStateException("Trận " + m.getMatchId() + " chưa đủ hai đội");
         }
+        m.ensureResultEditable();
         if (m.getStatus() == MatchStatus.FINISHED && !confirm("Trận đã có kết quả " + m.getScoreA() + " - "
                 + m.getScoreB() + ". Sửa lại và tính lại bảng xếp hạng?")) {
             return;
@@ -402,7 +406,8 @@ public class GuiApp extends JFrame {
         JTextField scoreB = new JTextField();
         if (form("Nhập kết quả " + m.getMatchId(), m.getTeamA().getTeamName(), scoreA,
                 m.getTeamB().getTeamName(), scoreB)) {
-            admin.updateMatchResult(m, optionalInt(scoreA.getText()), optionalInt(scoreB.getText()));
+            admin.updateMatchResult(m, optionalInt(scoreA.getText(), "Tỉ số " + m.getTeamA().getTeamName()),
+                    optionalInt(scoreB.getText(), "Tỉ số " + m.getTeamB().getTeamName()));
         }
     }
 
@@ -431,7 +436,7 @@ public class GuiApp extends JFrame {
             admin.unlockUser(user);
         }
         if (choice >= 0) {
-            info(user.getEmail() + ": " + user.getAccountStatus());
+            info("Tài khoản " + user.getEmail() + ": " + user.getAccountStatus().getLabel());
         }
     }
 
@@ -510,11 +515,11 @@ public class GuiApp extends JFrame {
         try {
             action.run();
         } catch (TournamentException e) {
-            error("Lỗi nghiệp vụ [" + e.getClass().getSimpleName() + "]\n" + e.getMessage());
-        } catch (IllegalArgumentException | IllegalStateException | DateTimeParseException e) {
+            error(e.getKind() + "\n" + e.getMessage());
+        } catch (IllegalArgumentException | IllegalStateException e) {
             error("Dữ liệu không hợp lệ\n" + e.getMessage());
         } catch (Exception e) {
-            error("Lỗi: " + e);
+            error("Lỗi không mong đợi\n" + e);
         }
         refreshAll();
     }
@@ -527,7 +532,7 @@ public class GuiApp extends JFrame {
             System.setOut(capture);
             action.run();
         } catch (Exception e) {
-            buffer.writeBytes(("\nLỗi: " + e).getBytes(StandardCharsets.UTF_8));
+            buffer.writeBytes(("\nLỗi không mong đợi: " + e).getBytes(StandardCharsets.UTF_8));
         } finally {
             System.setOut(original);
             AppClock.useSystemClock();
@@ -581,8 +586,25 @@ public class GuiApp extends JFrame {
     }
 
     /** Ô để trống trả về null để Match báo "Tỉ số không được để trống". */
-    private static Integer optionalInt(String text) {
-        return text.isBlank() ? null : Integer.valueOf(text.trim());
+    private static Integer optionalInt(String text, String field) {
+        return text.isBlank() ? null : parseInt(text, field);
+    }
+
+    private static int parseInt(String text, String field) {
+        try {
+            return Integer.parseInt(text.trim());
+        } catch (NumberFormatException e) {
+            throw new IllegalArgumentException(field + " phải là số nguyên (đang nhập \"" + text.trim() + "\")");
+        }
+    }
+
+    private static LocalDateTime parseTime(String text, String field) {
+        try {
+            return LocalDateTime.parse(text.trim(), TIME);
+        } catch (DateTimeParseException e) {
+            throw new IllegalArgumentException(field + " phải theo dạng dd/MM/yyyy HH:mm, ví dụ 01/11/2026 19:00"
+                    + " (đang nhập \"" + text.trim() + "\")");
+        }
     }
 
     private static String teamName(Team team) {

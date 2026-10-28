@@ -54,6 +54,14 @@ public class Match implements Identifiable, Serializable {
         transitionTo(MatchStatus.IN_PROGRESS);
     }
 
+    /** Loại trực tiếp đã ghi kết quả thì không sửa, vì đội thắng đã được đưa lên vòng sau. */
+    public void ensureResultEditable() throws InvalidStatusTransitionException {
+        if (status.isPlayed() && tournament.getFormat() == TournamentFormat.SINGLE_ELIMINATION) {
+            throw new InvalidStatusTransitionException("Trận " + matchId
+                    + " đã có kết quả, thể thức loại trực tiếp không cho sửa");
+        }
+    }
+
     /** Ghi tỉ số (vòng tròn thì sửa lại được). Kiểm tra hết rồi mới ghi, nên tỉ số sai thì trận giữ nguyên. */
     public void setResult(Integer scoreA, Integer scoreB)
             throws InvalidScoreException, InvalidStatusTransitionException {
@@ -62,15 +70,12 @@ public class Match implements Identifiable, Serializable {
             throw new InvalidScoreException("Tỉ số không được để trống");
         }
         if (scoreA < 0 || scoreB < 0) {
-            throw new InvalidScoreException("Tỉ số phải là số nguyên không âm (nhận " + scoreA + "-" + scoreB + ")");
+            throw new InvalidScoreException("Tỉ số không được âm (đang nhập " + scoreA + " và " + scoreB + ")");
         }
         if (!tournament.getFormat().isDrawAllowed() && scoreA.equals(scoreB)) {
             throw new InvalidScoreException("Thể thức " + tournament.getFormat().getLabel() + " không cho phép hòa");
         }
-        if (status.isPlayed() && tournament.getFormat() == TournamentFormat.SINGLE_ELIMINATION) {
-            throw new InvalidStatusTransitionException("Trận " + matchId
-                    + " đã có kết quả, thể thức loại trực tiếp không cho sửa");
-        }
+        ensureResultEditable();
         transitionTo(MatchStatus.FINISHED);
         this.scoreA = scoreA;
         this.scoreB = scoreB;
@@ -122,7 +127,7 @@ public class Match implements Identifiable, Serializable {
 
     public void setNextMatch(Match nextMatch) {
         if (nextMatch == this || (nextMatch != null && nextMatch.tournament != tournament)) {
-            throw new IllegalArgumentException("nextMatch phải là một trận khác của cùng giải");
+            throw new IllegalArgumentException("Trận kế tiếp phải là một trận khác của cùng giải");
         }
         this.nextMatch = nextMatch;
     }

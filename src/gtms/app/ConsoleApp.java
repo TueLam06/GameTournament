@@ -22,6 +22,7 @@ import java.nio.file.Path;
 import java.nio.file.Paths;
 import java.util.Optional;
 import java.util.Scanner;
+import java.util.function.Function;
 
 /** Chương trình console. Chạy "demo" để xem kịch bản tự động, "test" để chạy kiểm thử. */
 public class ConsoleApp {
@@ -83,7 +84,7 @@ public class ConsoleApp {
         try {
             action.run();
         } catch (TournamentException e) {
-            System.out.println("  ! Lỗi nghiệp vụ [" + e.getClass().getSimpleName() + "]: " + e.getMessage());
+            System.out.println("  ! " + e.getKind() + ": " + e.getMessage());
         } catch (IllegalArgumentException | IllegalStateException e) {
             System.out.println("  ! Dữ liệu không hợp lệ: " + e.getMessage());
         } catch (IOException e) {
@@ -127,8 +128,7 @@ public class ConsoleApp {
 
     private void searchTournaments() {
         String keyword = in.text("Từ khóa tên giải (Enter = tất cả): ");
-        String statusText = in.text("Trạng thái (Enter = tất cả; DRAFT, REGISTRATION_OPEN, ONGOING, FINISHED...): ");
-        TournamentStatus status = statusText.isEmpty() ? null : TournamentStatus.valueOf(statusText.toUpperCase());
+        TournamentStatus status = pick("Trạng thái", TournamentStatus.values(), TournamentStatus::getLabel, true);
         String game = in.text("Tựa game (Enter = tất cả): ");
         Printer.tournaments(service.searchTournaments(keyword, status, game));
     }
@@ -335,6 +335,28 @@ public class ConsoleApp {
     }
 
     private TournamentFormat readFormat() {
-        return TournamentFormat.valueOf(in.text("Thể thức (ROUND_ROBIN / SINGLE_ELIMINATION): ").toUpperCase());
+        return pick("Thể thức", TournamentFormat.values(), TournamentFormat::getLabel, false);
+    }
+
+    /** In danh sách đánh số theo nhãn tiếng Việt rồi cho chọn theo số; optional thì 0 = tất cả (trả về null). */
+    private <E> E pick(String title, E[] values, Function<E, String> label, boolean optional) {
+        StringBuilder menu = new StringBuilder(title + ": ");
+        for (int i = 0; i < values.length; i++) {
+            menu.append(i + 1).append(". ").append(label.apply(values[i])).append("   ");
+        }
+        if (optional) {
+            menu.append("0. Tất cả");
+        }
+        System.out.println(menu.toString().trim());
+        while (true) {
+            int choice = in.integer("Chọn: ");
+            if (optional && choice == 0) {
+                return null;
+            }
+            if (choice >= 1 && choice <= values.length) {
+                return values[choice - 1];
+            }
+            System.out.println("  ! Chọn số từ " + (optional ? 0 : 1) + " đến " + values.length);
+        }
     }
 }

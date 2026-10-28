@@ -98,7 +98,7 @@ public class Admin extends User {
     public void lockUser(User user) throws TournamentException {
         ensureActive();
         if (user == this) {
-            throw new TournamentException("Admin không thể tự khóa tài khoản của mình");
+            throw new TournamentException("Không thể tự khóa tài khoản của chính mình");
         }
         user.setAccountStatus(AccountStatus.LOCKED);
     }
@@ -109,7 +109,7 @@ public class Admin extends User {
     }
 
     @Override
-    public String getRole() { return "Admin"; }
+    public String getRole() { return "Ban tổ chức"; }
 
     @Override
     public void showMenu() {

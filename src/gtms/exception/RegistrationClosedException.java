@@ -7,4 +7,9 @@ public class RegistrationClosedException extends TournamentException {
     public RegistrationClosedException(String message) {
         super(message);
     }
+
+    @Override
+    public String getKind() {
+        return "Không nhận đăng ký";
+    }
 }

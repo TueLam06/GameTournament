@@ -196,6 +196,10 @@ public class Tournament implements Identifiable, Serializable {
     }
 
     public void changeStatus(TournamentStatus next) throws InvalidStatusTransitionException {
+        if (status == next) {
+            throw new InvalidStatusTransitionException("Giải " + name + " đã ở trạng thái \"" + status.getLabel()
+                    + "\" rồi");
+        }
         if (!status.canTransitionTo(next)) {
             throw new InvalidStatusTransitionException("Giải " + name + " đang ở trạng thái \"" + status.getLabel()
                     + "\", không chuyển sang \"" + next.getLabel() + "\" được. " + status.nextOptions());
@@ -251,7 +255,7 @@ public class Tournament implements Identifiable, Serializable {
     /** Sinh lịch, tạo bảng xếp hạng 0 điểm và chuyển giải sang ONGOING. */
     public List<Match> generateSchedule() throws TournamentException {
         if (!matches.isEmpty()) {
-            throw new TournamentException("Giải đã có lịch, Admin cần xác nhận để xóa lịch cũ và sinh lại");
+            throw new TournamentException("Giải đã có lịch, ban tổ chức cần xác nhận để xóa lịch cũ và sinh lại");
         }
         if (status != TournamentStatus.REGISTRATION_CLOSED) {
             throw new InvalidStatusTransitionException("Chỉ sinh lịch khi giải đã đóng đăng ký (hiện tại: "

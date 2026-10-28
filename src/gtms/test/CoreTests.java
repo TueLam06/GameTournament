@@ -193,6 +193,19 @@ public final class CoreTests {
         }
         admin.closeRegistration(six);
         check(admin.generateSchedule(six).size() == 7, "duyệt thêm cho đủ 8 đội thì sinh được lịch");
+
+        Tournament three = openTournament(admin, TournamentFormat.SINGLE_ELIMINATION, 4);
+        Registration extra = null;
+        for (int i = 0; i < 3; i++) {
+            extra = managerWithTeam(2, "Valorant").registerTournament(three);
+            admin.approveRegistration(extra);
+        }
+        Registration approved = extra;
+        expect(InvalidStatusTransitionException.class, () -> admin.approveRegistration(approved));
+        expect(TournamentException.class, () -> admin.closeRegistration(three));
+        admin.rejectRegistration(approved, "Bớt đội cho đủ 2");
+        admin.closeRegistration(three);
+        check(admin.generateSchedule(three).size() == 1, "từ chối bớt một đơn đã duyệt thì còn 2 đội, đóng được");
     }
 
     private static void rankingPoints() throws Exception {

@@ -168,8 +168,16 @@ public final class DemoScenario {
         try {
             step.run();
             System.out.println("[KHÔNG LỖI?] " + description);
-        } catch (TournamentException | IllegalArgumentException e) {
-            System.out.printf("[OK] %-42s -> %s: %s%n", description, e.getClass().getSimpleName(), e.getMessage());
+        } catch (TournamentException e) {
+            printCaught(description, e.getKind(), e);
+        } catch (IllegalArgumentException e) {
+            printCaught(description, "Dữ liệu không hợp lệ", e);
         }
+    }
+
+    /** Giữ tên lớp ngoại lệ trong ngoặc để khi thuyết trình chỉ ra được cây ngoại lệ. */
+    private static void printCaught(String description, String kind, Exception e) {
+        System.out.printf("[OK] %-42s -> %s (%s): %s%n", description, kind, e.getClass().getSimpleName(),
+                e.getMessage());
     }
 }
